@@ -88,19 +88,19 @@ resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/connections
   }
 }
 
-// --- gpt-4o Model Deployment ---
-resource gpt4o 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+// --- gpt-5.4 Model Deployment ---
+resource gpt54 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: cognitiveAccount
-  name: 'gpt-4o'
+  name: 'gpt-5.4'
   sku: {
-    name: 'Standard'
+    name: 'GlobalStandard'
     capacity: 60
   }
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-4o'
-      version: '2024-08-06'
+      name: 'gpt-5.4'
+      version: '2026-03-05'
     }
   }
 }

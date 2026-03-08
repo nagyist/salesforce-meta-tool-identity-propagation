@@ -561,7 +561,7 @@ def create_agent():
             agent = project_client.agents.create_version(
                 agent_name=agent_name,
                 definition=PromptAgentDefinition(
-                    model="gpt-4o",
+                    model="gpt-5.4",
                     instructions=instructions,
                     tools=tools,
                 ),

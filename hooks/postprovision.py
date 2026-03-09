@@ -526,7 +526,7 @@ def create_agent():
     sf_tool_kwargs = {
         "server_label": "salesforce_mcp",
         "server_url": sf_mcp_endpoint,
-        "require_approval": "never",
+        "require_approval": "always",
         "allowed_tools": [
             "list_objects",
             "describe_object",
@@ -561,7 +561,7 @@ def create_agent():
             agent = project_client.agents.create_version(
                 agent_name=agent_name,
                 definition=PromptAgentDefinition(
-                    model="gpt-4o",
+                    model="gpt-5.4",
                     instructions=instructions,
                     tools=tools,
                 ),

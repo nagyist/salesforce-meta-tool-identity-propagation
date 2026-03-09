@@ -1,11 +1,11 @@
 name: sf-mcp-tool
 services:
   chat-app:
-    project: ./src/chat-app
+    project: ./src
     language: docker
     host: containerapp
     docker:
-      path: ./Dockerfile
+      path: ./chat-app/Dockerfile
       remoteBuild: true
   salesforce-mcp:
     project: ./src/salesforce-mcp

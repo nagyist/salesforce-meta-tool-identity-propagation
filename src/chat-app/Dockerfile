@@ -1,7 +1,7 @@
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
-COPY requirements.txt .
+COPY chat-app/requirements.txt .
 RUN pip install --no-cache-dir --target=/deps -r requirements.txt
 
 FROM python:3.12-slim
@@ -10,7 +10,8 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
 COPY --from=builder /deps /deps
-COPY . .
+COPY chat-app/ .
+COPY shared/ /app/shared/
 
 ENV PYTHONPATH=/deps
 ENV PYTHONUNBUFFERED=1

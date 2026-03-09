@@ -119,6 +119,7 @@ async def chat_approve(request: Request):
     access_token = body.get("access_token")
     previous_response_id = body.get("previous_response_id")
     approval_id_list = body.get("approval_ids", [])
+    approve = body.get("approve", True)
 
     if not access_token:
         raise HTTPException(status_code=401, detail="access_token required")
@@ -130,6 +131,7 @@ async def chat_approve(request: Request):
             access_token=access_token,
             previous_response_id=previous_response_id,
             approval_ids=approval_id_list,
+            approve=approve,
         )
         return result
     except asyncio.TimeoutError:

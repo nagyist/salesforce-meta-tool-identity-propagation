@@ -53,6 +53,7 @@ def parse_output_items(output_items, request_id: str = ""):
         "text": "",
         "approval_required": False,
         "approval_ids": [],
+        "tool_calls": [],
     }
 
     for item in output_items:
@@ -86,6 +87,12 @@ def parse_output_items(output_items, request_id: str = ""):
                 str(tool_args)[:300],
                 str(tool_error)[:200] if tool_error else None,
             )
+            result["tool_calls"].append({
+                "name": tool_name,
+                "arguments": tool_args,
+                "error": str(tool_error) if tool_error else None,
+                "output": getattr(item, "output", None),
+            })
 
         elif item_type == "message":
             content = getattr(item, "content", [])
@@ -159,19 +166,21 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
 
 
 async def approve_tools(access_token: str, previous_response_id: str,
-                        approval_ids: list, agent_name: str = None,
+                        approval_ids: list, approve: bool = True,
+                        agent_name: str = None,
                         timeout: float = 120) -> dict:
-    """Approve MCP tool calls and continue the conversation.
+    """Approve or deny MCP tool calls and continue the conversation.
 
     Args:
         access_token: User's Azure AD bearer token
         previous_response_id: Response ID containing the approval request
-        approval_ids: List of approval request IDs to approve
+        approval_ids: List of approval request IDs to approve/deny
+        approve: True to approve, False to deny
         agent_name: Agent name (default: from AGENT_NAME env var)
         timeout: Request timeout in seconds
 
     Returns:
-        dict with keys: response_id, type, text, approval_required, approval_ids
+        dict with keys: response_id, type, text, approval_required, approval_ids, tool_calls
     """
     agent_name = agent_name or os.environ.get("AGENT_NAME", "salesforce-assistant")
 
@@ -184,7 +193,7 @@ async def approve_tools(access_token: str, previous_response_id: str,
             approval_input = [
                 McpApprovalResponse(
                     type="mcp_approval_response",
-                    approve=True,
+                    approve=approve,
                     approval_request_id=aid,
                 )
                 for aid in approval_ids
@@ -193,7 +202,7 @@ async def approve_tools(access_token: str, previous_response_id: str,
             approval_input = [
                 {
                     "type": "mcp_approval_response",
-                    "approve": True,
+                    "approve": approve,
                     "approval_request_id": aid,
                 }
                 for aid in approval_ids

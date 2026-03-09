@@ -145,13 +145,27 @@ class SalesforceClient:
 
     @staticmethod
     def _slim_describe(full: dict) -> dict:
-        """Strip a cached describe result down to names, types, and required flags."""
+        """Strip a cached describe to names, types, required, referenceTo, and compact childRelationships."""
+        fields = []
+        for f in full["fields"]:
+            entry = {"name": f["name"], "type": f["type"], "required": f["required"]}
+            if f.get("referenceTo"):
+                entry["referenceTo"] = f["referenceTo"]
+            fields.append(entry)
+        result = {"name": full["name"], "fields": fields}
+        if full.get("childRelationships"):
+            result["childRelationships"] = [
+                {"name": cr["relationshipName"], "object": cr["childSObject"]}
+                for cr in full["childRelationships"]
+            ]
+        return result
+
+    @staticmethod
+    def _names_describe(full: dict) -> dict:
+        """Strip a describe result down to field names only."""
         return {
             "name": full["name"],
-            "fields": [
-                {"name": f["name"], "type": f["type"], "required": f["required"]}
-                for f in full["fields"]
-            ],
+            "fields": [f["name"] for f in full["fields"]],
         }
 
     async def query(self, soql: str) -> dict:

@@ -7,6 +7,7 @@ write, and approval tools via the Model Context Protocol (MCP).
 import json
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 
@@ -61,8 +62,10 @@ Salesforce MCP server — discovers objects and fields dynamically via metadata 
 ## Workflow
 1. **Plan** — Tell the user what you intend to do before calling tools.
 2. **list_objects** — Find the API name (use `name`, not `label`, for all subsequent calls).
-3. **describe_object** — REQUIRED before create/update/upsert/delete.
+3. **describe_object** — REQUIRED before create/update/upsert/delete (use mode="full" for writes).
    For read queries, skip if you already know the field names, or use mode="slim" if unsure.
+   Slim includes referenceTo (lookup targets) and childRelationships (for subqueries) — enough for reads.
+   Use mode="names" when you only need to validate field names (cheapest option).
 4. **Execute** — soql_query, search_records, write_record, or process_approval.
 5. **Summarize** — Present results in plain language. Do NOT dump raw JSON for large results.
 
@@ -74,8 +77,8 @@ Salesforce MCP server — discovers objects and fields dynamically via metadata 
   You may query these without calling describe_object first.
 
 ## Rules
-- Do NOT guess field names — use describe_object (slim for reads, full for writes).
-- On INVALID_FIELD or MALFORMED_QUERY: call describe_object(mode="full"), fix field names, retry.
+- Do NOT guess field names — use describe_object (slim for reads/relationships, full for writes).
+- On INVALID_FIELD or MALFORMED_QUERY: the error includes availableFields — fix your query and retry.
 - ALWAYS confirm with the user before delete or reject operations.
 - Always include LIMIT in SOQL unless the user specifically requests all rows.
 - Summarize large result sets in plain language — do not dump raw JSON.
@@ -118,6 +121,12 @@ def _sf_error_response(e: httpx.HTTPStatusError) -> str:
         "message": str(e),
         "httpStatus": status,
     })
+
+
+def _extract_object_name(soql: str) -> str | None:
+    """Extract the object name from a SOQL query's FROM clause."""
+    m = re.search(r"\bFROM\s+(\w+)", soql, re.IGNORECASE)
+    return m.group(1) if m else None
 
 
 def _clean_attributes(obj):
@@ -170,20 +179,26 @@ async def describe_object(object_name: str, mode: str = "slim") -> str:
 
     Args:
         object_name: API name (e.g., Account, Contact, Opportunity). Use `name` from list_objects.
-        mode: "slim" (default) — field names, types, required flags. Use for building queries.
-              "full" — includes picklistValues, referenceTo, childRelationships, externalId.
-              Use "full" before create/update/upsert/delete.
+        mode: "slim" (default) — field names, types, required flags, referenceTo for lookups,
+              and compact childRelationships. Use for queries and understanding relationships.
+              "full" — adds picklistValues, externalId, labels. Use before create/update/upsert/delete.
+              "names" — flat list of field names only. Cheapest option for field name validation.
 
     Returns:
-        slim: JSON with name and fields (name, type, required).
+        slim: JSON with name, fields (name, type, required, referenceTo), and
+              childRelationships [{name, object}]. Enough for queries and relationship traversal.
         full: JSON with fields (name, label, type, required, externalId, picklistValues,
-              referenceTo) and childRelationships.
+              referenceTo) and childRelationships [{childSObject, relationshipName, field}].
+        names: JSON with name and fields (name only).
     """
-    slim = mode != "full"
     log.info("tool=describe_object object=%s mode=%s", object_name, mode)
     t0 = time.monotonic()
     try:
-        result = await sf.describe_object(object_name, slim=slim)
+        if mode == "names":
+            result = await sf.describe_object(object_name, slim=True)
+            result = SalesforceClient._names_describe(result)
+        else:
+            result = await sf.describe_object(object_name, slim=(mode != "full"))
     except httpx.HTTPStatusError as e:
         return _sf_error_response(e)
     log.info("tool=describe_object done elapsed=%.1fs", time.monotonic() - t0)
@@ -209,6 +224,9 @@ async def soql_query(query: str, max_records: int = 2000) -> str:
 
     Returns:
         JSON with totalSize, records array, done flag. done=false means results were truncated.
+        On INVALID_FIELD or MALFORMED_QUERY errors, the response includes an availableFields
+        array with {name, type, referenceTo} for each field — use it to fix your query and retry.
+        Check referenceTo to find lookup fields for cross-object queries.
     """
     log.info("tool=soql_query max_records=%d", max_records)
     t0 = time.monotonic()
@@ -222,7 +240,22 @@ async def soql_query(query: str, max_records: int = 2000) -> str:
             result = await sf.query_more(result["nextRecordsUrl"])
             records.extend(result.get("records", []))
     except httpx.HTTPStatusError as e:
-        return _sf_error_response(e)
+        error_json = _sf_error_response(e)
+        # On field/query errors, append available fields so the agent can self-correct
+        error_data = json.loads(error_json)
+        if error_data.get("errorCode") in ("INVALID_FIELD", "MALFORMED_QUERY"):
+            obj_name = _extract_object_name(query)
+            if obj_name:
+                try:
+                    desc = await sf.describe_object(obj_name, slim=True)
+                    error_data["availableFields"] = [
+                        {"name": f["name"], "type": f["type"], **( {"referenceTo": f["referenceTo"]} if f.get("referenceTo") else {})}
+                        for f in desc["fields"]
+                    ]
+                except Exception:
+                    pass  # Don't fail the error response if describe fails
+                return json.dumps(error_data)
+        return error_json
 
     _clean_attributes(records)
 
@@ -337,7 +370,7 @@ async def write_record(
         # Validate field names for operations that send data
         desc = None
         if op in ("create", "update", "upsert") and field_values:
-            desc = await sf.describe_object(object_name)
+            desc = await sf.describe_object(object_name, slim=True)
             valid_fields = {f["name"] for f in desc["fields"]}
             invalid = set(field_values.keys()) - valid_fields
             if invalid:
@@ -346,10 +379,9 @@ async def write_record(
                     "error": f"Invalid field names: {', '.join(sorted(invalid))}. Use describe_object to find valid field names.",
                 })
 
-        # Validate external ID field for upsert
+        # Validate external ID field for upsert (needs full describe for externalId flag)
         if op == "upsert":
-            if not desc:
-                desc = await sf.describe_object(object_name)
+            desc = await sf.describe_object(object_name)
             ext_field_meta = next(
                 (f for f in desc["fields"] if f["name"] == external_id_field), None
             )

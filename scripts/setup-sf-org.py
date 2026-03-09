@@ -55,6 +55,8 @@ DEFAULT_PERM_SET_LABEL = "MCP OBO Service Account"
 # Demo user
 DEMO_PROFILE_NAME = "Standard User - No Delete"
 DEMO_USER_ALIAS = "demondel"
+DEMO_PERM_SET_NAME = "MCP_Standard_Fields"
+DEMO_PERM_SET_LABEL = "MCP Standard Fields"
 
 # Service account
 SVC_PROFILE_NAME = "Minimum Access - Salesforce"
@@ -569,22 +571,9 @@ DEMO_PROFILE_XML = """\
 <Profile xmlns="http://soap.sforce.com/2006/04/metadata">
     <custom>true</custom>
     <userLicense>Salesforce</userLicense>
-    <userPermissions>
-        <enabled>true</enabled>
-        <name>ApiEnabled</name>
-    </userPermissions>
-    <userPermissions>
-        <enabled>true</enabled>
-        <name>LightningExperienceUser</name>
-    </userPermissions>
-    <userPermissions>
-        <enabled>true</enabled>
-        <name>RunReports</name>
-    </userPermissions>
-    <userPermissions>
-        <enabled>true</enabled>
-        <name>ExportReport</name>
-    </userPermissions>
+    <!-- Object-level CRUD only. Account delete is denied.
+         Field-level security and user permissions are granted
+         via the MCP_Standard_Fields permission set. -->
     <objectPermissions>
         <allowCreate>true</allowCreate>
         <allowDelete>false</allowDelete>
@@ -699,6 +688,134 @@ def _create_demo_profile(org: str) -> str | None:
     else:
         print(f"  Profile ID: {profile_id}")
     return profile_id
+
+
+MCP_FIELDS_PERM_SET_XML = f"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>{DEMO_PERM_SET_LABEL}</label>
+    <description>Standard field access for MCP agent users. Grants FLS on common fields \
+across Account, Contact, Opportunity, Case, Lead, and user permissions for API and Lightning.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ApiEnabled</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>LightningExperienceUser</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>RunReports</name>
+    </userPermissions>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ExportReport</name>
+    </userPermissions>
+    <!-- Account fields -->
+    <fieldPermissions><field>Account.AccountNumber</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.AnnualRevenue</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.Description</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.Fax</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.Industry</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.NumberOfEmployees</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.Phone</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.Rating</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.Site</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.Type</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Account.Website</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <!-- Contact fields -->
+    <fieldPermissions><field>Contact.AccountId</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.Department</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.Email</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.Fax</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.HomePhone</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.LeadSource</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.MobilePhone</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.OtherPhone</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.Phone</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Contact.Title</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <!-- Opportunity fields -->
+    <fieldPermissions><field>Opportunity.AccountId</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Opportunity.Amount</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Opportunity.Description</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Opportunity.ExpectedRevenue</field><editable>false</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Opportunity.LeadSource</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Opportunity.NextStep</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Opportunity.Probability</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Opportunity.TotalOpportunityQuantity</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Opportunity.Type</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <!-- Case fields -->
+    <fieldPermissions><field>Case.AccountId</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Case.ContactId</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Case.Description</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Case.Origin</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Case.Priority</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Case.Reason</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Case.Subject</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Case.Type</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <!-- Lead fields -->
+    <fieldPermissions><field>Lead.AnnualRevenue</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Company</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Description</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Email</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Industry</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.LeadSource</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.MobilePhone</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.NumberOfEmployees</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Phone</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Rating</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Status</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Title</field><editable>true</editable><readable>true</readable></fieldPermissions>
+    <fieldPermissions><field>Lead.Website</field><editable>true</editable><readable>true</readable></fieldPermissions>
+</PermissionSet>
+"""
+
+
+def _deploy_demo_perm_set(org: str) -> bool:
+    """Deploy the MCP_Standard_Fields permission set."""
+    print(f"  Deploying Permission Set '{DEMO_PERM_SET_LABEL}'...")
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as work_dir:
+        init_sfdx_project(work_dir)
+        ps_dir = os.path.join(
+            work_dir, "force-app", "main", "default", "permissionsets",
+        )
+        os.makedirs(ps_dir, exist_ok=True)
+        path = os.path.join(ps_dir, f"{DEMO_PERM_SET_NAME}.permissionset-meta.xml")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(MCP_FIELDS_PERM_SET_XML)
+        if not deploy_metadata(org, work_dir):
+            print("  ERROR: Failed to deploy permission set")
+            return False
+    print(f"  Permission Set '{DEMO_PERM_SET_LABEL}' deployed")
+    return True
+
+
+def _assign_demo_perm_set(org: str, user_id: str, username: str) -> bool:
+    """Assign MCP_Standard_Fields Permission Set to the demo user."""
+    ps_records = soql_query(
+        org,
+        f"SELECT Id FROM PermissionSet "
+        f"WHERE Name = '{DEMO_PERM_SET_NAME}' AND IsOwnedByProfile = false",
+    )
+    if not ps_records:
+        print(f"  WARNING: Permission Set '{DEMO_PERM_SET_NAME}' not found")
+        return False
+    ps_id = ps_records[0]["Id"]
+    print(f"  Found Permission Set: {DEMO_PERM_SET_NAME} ({ps_id})")
+
+    access_token, instance_url = get_access_token(org)
+    if not access_token or not instance_url:
+        print("  ERROR: Could not get org credentials")
+        return False
+
+    ok = assign_perm_set_to_user(instance_url, access_token, ps_id, user_id)
+    if ok:
+        print(f"  Assigned '{DEMO_PERM_SET_LABEL}' to {username}")
+    else:
+        print(f"  FAILED to assign '{DEMO_PERM_SET_LABEL}' to {username}")
+    return ok
 
 
 def _create_demo_user(org: str, profile_id: str,
@@ -848,6 +965,11 @@ def step_demo(org: str, email: str, username: str | None = None) -> dict:
     user_id = _create_demo_user(org, profile_id, username, email)
     if not user_id:
         return {"username": username}
+
+    # Deploy and assign permission set (FLS for standard fields)
+    print("\n  --- Deploy MCP Standard Fields permission set ---")
+    if _deploy_demo_perm_set(org):
+        _assign_demo_perm_set(org, user_id, username)
 
     # Reset password
     print("\n  --- Reset password ---")

@@ -526,7 +526,7 @@ def create_agent():
     sf_tool_kwargs = {
         "server_label": "salesforce_mcp",
         "server_url": sf_mcp_endpoint,
-        "require_approval": "never",
+        "require_approval": "always",
         "allowed_tools": [
             "list_objects",
             "describe_object",

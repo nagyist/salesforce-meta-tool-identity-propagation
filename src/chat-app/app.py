@@ -89,6 +89,7 @@ def _parse_output_items(output_items, request_id: str = ""):
         "text": "",
         "approval_required": False,
         "approval_ids": [],
+        "tool_calls": [],
     }
 
     for item in output_items:
@@ -113,7 +114,7 @@ def _parse_output_items(output_items, request_id: str = ""):
             )
 
         elif item_type == "mcp_call":
-            # Log MCP tool calls (completed calls that didn't require approval)
+            # Log and collect MCP tool calls for frontend visibility
             tool_name = getattr(item, "name", "")
             tool_args = getattr(item, "arguments", {})
             tool_error = getattr(item, "error", None)
@@ -123,6 +124,12 @@ def _parse_output_items(output_items, request_id: str = ""):
                 str(tool_args)[:300],
                 str(tool_error)[:200] if tool_error else None,
             )
+            result["tool_calls"].append({
+                "name": tool_name,
+                "arguments": tool_args,
+                "error": str(tool_error) if tool_error else None,
+                "output": getattr(item, "output", None),
+            })
 
         elif item_type == "message":
             content = getattr(item, "content", [])
@@ -244,6 +251,7 @@ async def chat_approve(request: Request):
     access_token = body.get("access_token")
     previous_response_id = body.get("previous_response_id")
     approval_ids = body.get("approval_ids", [])
+    approve = body.get("approve", True)
 
     if not access_token:
         raise HTTPException(status_code=401, detail="access_token required")
@@ -262,7 +270,7 @@ async def chat_approve(request: Request):
             approval_input = [
                 McpApprovalResponse(
                     type="mcp_approval_response",
-                    approve=True,
+                    approve=approve,
                     approval_request_id=aid,
                 )
                 for aid in approval_ids
@@ -271,7 +279,7 @@ async def chat_approve(request: Request):
             approval_input = [
                 {
                     "type": "mcp_approval_response",
-                    "approve": True,
+                    "approve": approve,
                     "approval_request_id": aid,
                 }
                 for aid in approval_ids

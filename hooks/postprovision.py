@@ -511,7 +511,11 @@ def create_agent():
 
     from azure.identity import DefaultAzureCredential
     from azure.ai.projects import AIProjectClient
-    from azure.ai.projects.models import PromptAgentDefinition, MCPTool
+    from azure.ai.projects.models import (
+        PromptAgentDefinition, MCPTool,
+        MCPToolRequireApproval1, MCPToolRequireApprovalAlways,
+        MCPToolRequireApprovalNever,
+    )
 
     credential = DefaultAzureCredential()
     project_client = AIProjectClient(
@@ -526,7 +530,18 @@ def create_agent():
     sf_tool_kwargs = {
         "server_label": "salesforce_mcp",
         "server_url": sf_mcp_endpoint,
-        "require_approval": "always",
+        "require_approval": MCPToolRequireApproval1(
+            never=MCPToolRequireApprovalNever(tool_names=[
+                "list_objects",
+                "describe_object",
+                "soql_query",
+                "search_records",
+            ]),
+            always=MCPToolRequireApprovalAlways(tool_names=[
+                "write_record",
+                "process_approval",
+            ]),
+        ),
         "allowed_tools": [
             "list_objects",
             "describe_object",

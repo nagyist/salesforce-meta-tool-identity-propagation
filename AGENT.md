@@ -78,7 +78,7 @@ azd up
 **Infrastructure:**
 - `infra/main.bicep` — Orchestrator, all module wiring
 - `infra/main.bicepparam` — Environment variable → Bicep param mapping
-- `infra/modules/apim-sf-mcp-obo.bicep` — OBO APIM API, Named Values
+- `infra/modules/apim-sf-mcp-obo.bicep` — OBO APIM API (native MCP type), backend, Named Values
 - `infra/modules/apim-jwt-bearer-cert.bicep` — Key Vault → APIM certificate binding
 - `infra/modules/sf-obo-connection.bicep` — Foundry UserEntraToken connection
 - `infra/modules/cognitive.bicep` — AI Services account, project, App Insights connection

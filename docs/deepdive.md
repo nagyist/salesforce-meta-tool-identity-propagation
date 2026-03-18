@@ -41,16 +41,17 @@ Bash (meta-tool)          ->       Salesforce MCP Server (meta-tool)
 
 The user asks: *"Show me my open opportunities worth over $100k"*
 
-1. **Discover.** `list_objects(filter="Opportunity")` — finds the object and its CRUD flags.
-2. **Learn.** `describe_object("Opportunity")` — gets every field: `Name`, `Amount`, `StageName` (with picklist values), `IsClosed`, and 60+ more.
-3. **Query.** Builds SOQL from the schema:
+1. **Identity.** `whoami()` — resolves the bearer token to a Salesforce UserId (`005...`).
+2. **Discover.** `list_objects(filter="Opportunity")` — finds the object and its CRUD flags.
+3. **Learn.** `describe_object("Opportunity")` — gets every field: `Name`, `Amount`, `StageName` (with picklist values), `IsClosed`, and 60+ more.
+4. **Query.** Builds SOQL from the schema:
    ```sql
    SELECT Name, Amount, StageName, CloseDate, Account.Name
    FROM Opportunity
-   WHERE Amount > 100000 AND IsClosed = false
+   WHERE OwnerId = '005...' AND Amount > 100000 AND IsClosed = false
    ORDER BY Amount DESC
    ```
-4. **Execute.** `soql_query(...)` returns *the user's own data*, filtered by their sharing rules and field-level security. A sales rep sees their pipeline. A VP sees the full forecast. Same query, different results.
+5. **Execute.** `soql_query(...)` returns *the user's own data*, filtered by their sharing rules and field-level security. A sales rep sees their pipeline. A VP sees the full forecast. Same query, different results.
 
 ### Why This Scales
 

@@ -246,6 +246,18 @@ class SalesforceClient:
         )
         return resp.json()
 
+    async def get_user_info(self) -> dict:
+        """Get the current user's identity from the bearer token."""
+        resp = await self._request("GET", "/services/oauth2/userinfo", _absolute=True)
+        raw = resp.json()
+        return {
+            "user_id": raw["user_id"],
+            "username": raw.get("preferred_username", ""),
+            "name": raw.get("name", ""),
+            "email": raw.get("email", ""),
+            "organization_id": raw.get("organization_id", ""),
+        }
+
     async def close(self):
         """Close the HTTP client."""
         await self._client.aclose()

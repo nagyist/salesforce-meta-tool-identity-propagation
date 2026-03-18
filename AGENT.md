@@ -93,7 +93,7 @@ azd up
 - `infra/policies/sf-mcp-obo-prm-policy.xml` — RFC 9728 PRM for OBO endpoint
 
 **Application (unchanged between modes):**
-- `src/salesforce-mcp/` — MCP server (6 tools, bearer passthrough)
+- `src/salesforce-mcp/` — MCP server (7 tools, bearer passthrough)
 - `src/chat-app/` — FastAPI + MSAL.js frontend
 
 **Hooks & Scripts:**

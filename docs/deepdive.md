@@ -54,18 +54,20 @@ The user asks: *"Show me my open opportunities worth over $100k"*
 
 ### Why This Scales
 
-The tool surface is **fixed**: six tools, 1,235 tokens. Whether the org has 50 objects or 5,000, the MCP server definition doesn't change.
+The tool surface is **fixed**: seven tools, ~1,300 tokens. Whether the org has 50 objects or 5,000, the MCP server definition doesn't change.
 
 | Approach | Token cost | Coverage |
 |----------|------------|----------|
 | Full OpenAPI spec | 5,000-15,000 | Hundreds of endpoints, most irrelevant |
 | RAG documentation chunks | 2,000-10,000 | Partial, depends on retrieval quality |
 | One tool per object | ~500 x N objects | Scales linearly, N can be 100+ |
-| **This MCP server** | **1,235 fixed** | **All objects, all fields, all operations** |
+| **This MCP server** | **~1,300 fixed** | **All objects, all fields, all operations** |
 
 ---
 
 ## Tool Reference
+
+**`whoami`**: Identity resolver. Returns the current user's Salesforce identity (user_id, username, name, email, organization_id) from the bearer token. The agent calls this when the user refers to "my" records, then uses the user_id as OwnerId or CreatedById in SOQL WHERE clauses. Think `whoami`.
 
 **`list_objects`**: Entry point. Filters by name or label to find the right object among 1,000+. Returns name, label, and CRUD capability flags. Think `ls`.
 

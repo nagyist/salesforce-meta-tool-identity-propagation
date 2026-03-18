@@ -4,7 +4,7 @@
 [![azd compatible](https://img.shields.io/badge/azd-compatible-blue.svg)](https://learn.microsoft.com/azure/developer/azure-developer-cli/)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 
-**One sign-on. Six tools. Your entire Salesforce org, with the user's own identity enforced end-to-end.**
+**One sign-on. Seven tools. Your entire Salesforce org, with the user's own identity enforced end-to-end.**
 
 ## The Problem
 
@@ -18,7 +18,7 @@ If the agent can do everything in Salesforce, it must operate under the user's o
 
 ## This Project
 
-A metadata-driven MCP server that solves both problems: six tools that let an AI agent discover objects, learn field schemas, and construct SOQL queries at runtime (the meta-tool pattern), with true On-Behalf-Of identity propagation that enforces the user's own permissions end-to-end. The user authenticates once to Azure AD; the system handles the rest.
+A metadata-driven MCP server that solves both problems: seven tools that let an AI agent discover objects, learn field schemas, and construct SOQL queries at runtime (the meta-tool pattern), with true On-Behalf-Of identity propagation that enforces the user's own permissions end-to-end. The user authenticates once to Azure AD; the system handles the rest.
 
 ```
 azd up   # deploys the full stack in ~15 minutes
@@ -28,7 +28,7 @@ azd up   # deploys the full stack in ~15 minutes
 
 ## How It Works
 
-The user asks a question. The agent discovers objects, learns schemas, and queries Salesforce — all through the same six tools, all with the user's own identity.
+The user asks a question. The agent discovers objects, learns schemas, and queries Salesforce — all through the same seven tools, all with the user's own identity.
 
 <table><tr>
 <td><img src="docs/diagrams/message-flow-sequence.gif" alt="Message Flow — Animated"></td>
@@ -48,18 +48,19 @@ APIM handles a three-phase exchange: validate the Azure AD JWT, resolve the Sale
 
 > **Deep dive:** [Detailed OBO exchange animation](docs/diagrams/obo-token-exchange.gif) | [Full detail PNG](docs/diagrams/obo-token-exchange.png) | [Excalidraw source](docs/diagrams/obo-token-exchange.excalidraw)
 
-## The 6 Tools: 1,235 Tokens for All of Salesforce
+## The 7 Tools: ~1,300 Tokens for All of Salesforce
 
 | Tool | Tokens | What it does |
 |------|--------|--------------|
+| `whoami` | ~60 | Resolve the current user's identity from the bearer token |
 | `list_objects` | 117 | Discover objects (1000+ in a typical org), filter by name/label |
 | `describe_object` | 109 | Field schemas, types, required flags, picklists, external IDs |
 | `soql_query` | 225 | Full SOQL: relationships, aggregates, GROUP BY, auto-pagination |
 | `search_records` | 175 | SOSL full-text search across multiple objects simultaneously |
 | `write_record` | 226 | Create, update, upsert (by external ID), delete |
 | `process_approval` | 129 | Submit, approve, reject via Salesforce approval workflows |
-| **Server instructions** | **254** | Workflow guidance, conventions, when-to-use-which-tool |
-| **Total** | **1,235** | **All objects, all fields, all operations** |
+| **Server instructions** | **~270** | Workflow guidance, conventions, when-to-use-which-tool |
+| **Total** | **~1,300** | **All objects, all fields, all operations** |
 
 > **Note:** The 1,235 tokens cover tool definitions. Each `describe_object` call returns field schemas at runtime. Schemas are loaded on demand rather than pre-loaded into the system prompt.
 
@@ -69,7 +70,7 @@ APIM handles a three-phase exchange: validate the Azure AD JWT, resolve the Sale
 
 For detailed technical explanations, see [docs/deepdive.md](docs/deepdive.md):
 
-- [**The Meta-Tool Pattern**](docs/deepdive.md#the-meta-tool-pattern) — Why six tools beat one-per-object, with token cost comparison
+- [**The Meta-Tool Pattern**](docs/deepdive.md#the-meta-tool-pattern) — Why seven tools beat one-per-object, with token cost comparison
 - [**Tool Reference**](docs/deepdive.md#tool-reference) — Per-tool descriptions with Unix analogies
 - [**Identity Propagation: End-to-End**](docs/deepdive.md#identity-propagation-end-to-end) — Architecture, hop-by-hop token trace, caching layers, key guarantees
 - [**IdP Flexibility**](docs/deepdive.md#idp-flexibility) — How to swap Azure AD for Okta, PingFed, or another OIDC provider
@@ -150,7 +151,7 @@ salesforce-meta-tool-identity-propagation/
 +-- azure.yaml                    # azd project: 2 services (chat-app, salesforce-mcp)
 +-- src/
 |   +-- salesforce-mcp/
-|   |   +-- app.py                # The MCP server: 6 tools, bearer passthrough
+|   |   +-- app.py                # The MCP server: 7 tools, bearer passthrough
 |   |   +-- salesforce_client.py  # Async Salesforce REST client with auth
 |   +-- chat-app/
 |       +-- app.py                # FastAPI backend, MSAL to Foundry agent bridge

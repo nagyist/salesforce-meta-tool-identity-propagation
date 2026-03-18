@@ -61,13 +61,15 @@ Salesforce MCP server — discovers objects and fields dynamically via metadata 
 
 ## Workflow
 1. **Plan** — Tell the user what you intend to do before calling tools.
-2. **list_objects** — Find the API name (use `name`, not `label`, for all subsequent calls).
-3. **describe_object** — REQUIRED before create/update/upsert/delete (use mode="full" for writes).
+2. **whoami** — If the user says "my" or refers to themselves, call this FIRST
+   to get their UserId. Use it as OwnerId or CreatedById in SOQL WHERE clauses.
+3. **list_objects** — Find the API name (use `name`, not `label`, for all subsequent calls).
+4. **describe_object** — REQUIRED before create/update/upsert/delete (use mode="full" for writes).
    For read queries, skip if you already know the field names, or use mode="slim" if unsure.
    Slim includes referenceTo (lookup targets) and childRelationships (for subqueries) — enough for reads.
    Use mode="names" when you only need to validate field names (cheapest option).
-4. **Execute** — soql_query, search_records, write_record, or process_approval.
-5. **Summarize** — Present results in plain language. Do NOT dump raw JSON for large results.
+5. **Execute** — soql_query, search_records, write_record, or process_approval.
+6. **Summarize** — Present results in plain language. Do NOT dump raw JSON for large results.
 
 ## Conventions
 - All API names are PascalCase: Account, OpportunityLineItem, Custom_Field__c.
@@ -138,6 +140,26 @@ def _clean_attributes(obj):
     elif isinstance(obj, list):
         for item in obj:
             _clean_attributes(item)
+
+
+@mcp.tool()
+async def whoami() -> str:
+    """Get the current user's Salesforce identity.
+
+    Call this when the user refers to "my" records (e.g. "my opportunities").
+    Use the returned user_id as OwnerId or CreatedById in SOQL WHERE clauses.
+
+    Returns:
+        JSON with user_id, username, name, email, organization_id.
+    """
+    log.info("tool=whoami")
+    t0 = time.monotonic()
+    try:
+        result = await sf.get_user_info()
+    except httpx.HTTPStatusError as e:
+        return _sf_error_response(e)
+    log.info("tool=whoami done elapsed=%.1fs", time.monotonic() - t0)
+    return json.dumps(result)
 
 
 @mcp.tool()

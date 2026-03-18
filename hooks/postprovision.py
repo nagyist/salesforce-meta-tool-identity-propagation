@@ -590,6 +590,7 @@ def create_agent():
         "server_url": sf_mcp_endpoint,
         "require_approval": "never",
         "allowed_tools": [
+            "whoami",
             "list_objects",
             "describe_object",
             "soql_query",
@@ -630,13 +631,15 @@ values and validation rules can change at any time.
 
 ## Workflow
 1. Plan — tell the user what you intend to do before calling tools.
-2. list_objects — find the API name (use `name`, not `label`).
-3. describe_object — REQUIRED before create/update/upsert/delete (use mode="full").
+2. whoami — if the user says "my" or refers to themselves, call this FIRST \
+to get their UserId. Use it as OwnerId or CreatedById in SOQL WHERE clauses.
+3. list_objects — find the API name (use `name`, not `label`).
+4. describe_object — REQUIRED before create/update/upsert/delete (use mode="full").
    For reads, skip if you know the fields (from memory or prior turns), or use mode="slim" \
 to discover fields and relationships.
    Slim returns referenceTo (lookup targets) and childRelationships (for subqueries).
-4. Execute — soql_query, search_records, write_record, or process_approval.
-5. Summarize — present results in plain language. Do NOT dump raw JSON.
+5. Execute — soql_query, search_records, write_record, or process_approval.
+6. Summarize — present results in plain language. Do NOT dump raw JSON.
 
 ## Common fields (no describe needed)
 Id, Name, CreatedDate, OwnerId, LastModifiedDate — available on all standard objects.

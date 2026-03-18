@@ -1,4 +1,5 @@
-"""Post-provision hook: upload cert, create Entra app, configure auth, create Foundry agent.
+"""Post-provision hook: upload cert, create Entra app, configure auth, create Foundry agent,
+deploy agent application, bootstrap Bot Service, publish Teams app.
 
 After Bicep deploys Azure resources, this hook:
 0. Uploads SF JWT Bearer cert to Key Vault + creates APIM cert binding (if cert exists locally)
@@ -6,6 +7,10 @@ After Bicep deploys Azure resources, this hook:
 2. Creates the Foundry agent with Salesforce MCP tool (OBO connection)
 3. Updates Chat App Container App env vars
 4. Recreates OBO connection via ARM REST + updates APIM Named Values
+5. Creates/updates Agent Application (REST-only — enables Activity Protocol endpoint)
+6. Creates/updates Agent Deployment (links agent version to application)
+7. Bootstraps Bot Service + channels via ARM REST (first-run only — Bicep takes over after)
+8. Publishes Teams app to org catalog via Graph API (org-wide distribution)
 
 Uses az CLI for Entra ops because the Graph Bicep extension requires
 Application.ReadWrite.All on the ARM deployment identity, which is not
@@ -541,12 +546,13 @@ def create_agent():
 
     Uses the OBO connection (UserEntraToken) and the OBO APIM endpoint.
     Includes MemorySearchTool for per-user conversational memory.
+    Returns the agent version number (for use by create_agent_deployment).
     """
     project_endpoint = os.environ.get("AI_FOUNDRY_PROJECT_ENDPOINT")
 
     if not project_endpoint:
         print("WARNING: Missing AI_FOUNDRY_PROJECT_ENDPOINT — skipping agent creation.")
-        return
+        return None
 
     sf_mcp_endpoint = os.environ.get("APIM_SF_MCP_OBO_ENDPOINT", "")
     if not sf_mcp_endpoint:
@@ -557,7 +563,7 @@ def create_agent():
 
     if not sf_mcp_endpoint:
         print("WARNING: No SF MCP endpoint available — skipping agent creation.")
-        return
+        return None
 
     print(f"\nProject endpoint: {project_endpoint}")
     print(f"SF MCP endpoint:  {sf_mcp_endpoint}")
@@ -672,7 +678,7 @@ Check childRelationships on the parent object for an alternative path (subquery)
             print(f"  Tools: {len(tools)} tool(s) configured")
             print("\nOBO flow requires no consent. Send a chat message to test.")
             print(f"Agent: {agent.name} v{agent.version}")
-            return
+            return agent.version
         except Exception as e:
             if "not found" in str(e).lower() and attempt < max_retries - 1:
                 print(f"  Attempt {attempt + 1}/{max_retries}: {e}")
@@ -681,6 +687,448 @@ Check childRelationships on the parent object for an alternative path (subquery)
                 retry_delay = min(retry_delay * 2, 60)
             else:
                 raise
+
+
+def _arm_rest(method, url, body=None, parse_json_response=True):
+    """Call Azure ARM REST API via az rest. Returns parsed JSON or None."""
+    cmd = f'az rest --method {method} --url "{url}"'
+    if body is not None:
+        body_file = _write_temp_json(body)
+        cmd += f' --headers "Content-Type=application/json" --body "@{body_file}"'
+    else:
+        body_file = None
+    try:
+        return run(cmd, parse_json=parse_json_response)
+    finally:
+        if body_file:
+            os.unlink(body_file)
+
+
+def _arm_project_base():
+    """Build the ARM control-plane base URL for the Foundry project.
+
+    Returns e.g. https://management.azure.com/subscriptions/.../accounts/.../projects/...
+    """
+    sub_id = run("az account show --query id -o tsv")
+    rg = os.environ.get("AZURE_RESOURCE_GROUP", "")
+    account = os.environ.get("COGNITIVE_ACCOUNT_NAME", "")
+    project = os.environ.get("AI_FOUNDRY_PROJECT_NAME", "")
+    return (
+        f"https://management.azure.com/subscriptions/{sub_id}"
+        f"/resourceGroups/{rg}"
+        f"/providers/Microsoft.CognitiveServices/accounts/{account}"
+        f"/projects/{project}"
+    )
+
+
+def _poll_provisioning(get_url, timeout=300, interval=10):
+    """Poll a GET URL until provisioningState is Succeeded/Failed or timeout."""
+    elapsed = 0
+    while elapsed < timeout:
+        result = _arm_rest("GET", get_url)
+        if result and isinstance(result, dict):
+            state = result.get("properties", {}).get("provisioningState", "")
+            if state == "Succeeded":
+                return result
+            if state in ("Failed", "Canceled"):
+                print(f"  Provisioning failed: {state}")
+                return result
+            print(f"  Provisioning state: {state} (waiting...)")
+        time.sleep(interval)
+        elapsed += interval
+    print(f"  WARNING: Polling timed out after {timeout}s")
+    return None
+
+
+def create_agent_application():
+    """Create/update the Agent Application via ARM control plane.
+
+    Returns the Foundry-managed identity clientId (msaAppId for Bot Service).
+    Persists AGENT_BOT_MSA_APP_ID via azd env set.
+    """
+    app_name = "salesforce-assistant"
+    agent_name = "salesforce-assistant"
+    api_version = "2026-01-15-preview"
+
+    base = _arm_project_base()
+    if not base or "None" in base:
+        print("  WARNING: Missing ARM project vars — skipping")
+        return None
+
+    url = f"{base}/applications/{app_name}?api-version={api_version}"
+
+    # Check if already exists
+    existing = _arm_rest("GET", url)
+    if existing and isinstance(existing, dict):
+        client_id = (
+            existing.get("properties", {})
+            .get("defaultInstanceIdentity", {})
+            .get("clientId")
+        )
+        if client_id:
+            print(f"  Agent Application already exists (clientId: {client_id})")
+            azd_env_set("AGENT_BOT_MSA_APP_ID", client_id)
+            return client_id
+
+    # Create/update
+    body = {
+        "properties": {
+            "displayName": "Salesforce Assistant",
+            "agents": [{"agentName": agent_name}],
+            "authorizationPolicy": {
+                "authorizationScheme": "Channels",
+            },
+        }
+    }
+
+    print(f"  Creating Agent Application '{app_name}'...")
+    result = _arm_rest("PUT", url, body)
+    if not result:
+        print("  ERROR: Failed to create Agent Application")
+        return None
+
+    # Check if already provisioned (PUT may return Succeeded immediately)
+    state = result.get("properties", {}).get("provisioningState", "")
+    if state != "Succeeded":
+        print("  Waiting for provisioning...")
+        result = _poll_provisioning(url)
+        if not result:
+            print("  ERROR: Agent Application provisioning timed out")
+            return None
+
+    client_id = (
+        result.get("properties", {})
+        .get("defaultInstanceIdentity", {})
+        .get("clientId")
+    )
+    if not client_id:
+        print("  ERROR: No clientId in Agent Application response")
+        print(f"  Response: {json.dumps(result, indent=2)[:500]}")
+        return None
+
+    print(f"  Agent Application created (clientId: {client_id})")
+    azd_env_set("AGENT_BOT_MSA_APP_ID", client_id)
+    return client_id
+
+
+def create_agent_deployment(agent_version):
+    """Create/update the Agent Deployment via ARM control plane.
+
+    Uses fixed deployment name 'salesforce-assistant' as a 'latest' pointer.
+    """
+    app_name = "salesforce-assistant"
+    deployment_name = "salesforce-assistant"
+    agent_name = "salesforce-assistant"
+    api_version = "2026-01-15-preview"
+
+    base = _arm_project_base()
+    if not base or "None" in base:
+        print("  WARNING: Missing ARM project vars — skipping")
+        return
+
+    url = f"{base}/applications/{app_name}/agentDeployments/{deployment_name}?api-version={api_version}"
+
+    body = {
+        "properties": {
+            "displayName": "Salesforce Assistant",
+            "deploymentType": "Managed",
+            "protocols": [
+                {"protocol": "Responses", "version": "1.0"},
+            ],
+            "agents": [
+                {
+                    "agentName": agent_name,
+                    "agentVersion": str(agent_version),
+                },
+            ],
+        }
+    }
+
+    print(f"  Creating/updating Agent Deployment '{deployment_name}' (agent v{agent_version})...")
+    result = _arm_rest("PUT", url, body)
+    if not result:
+        print("  ERROR: Failed to create Agent Deployment")
+        return
+
+    # Check if already provisioned
+    state = result.get("properties", {}).get("provisioningState", "")
+    if state != "Succeeded":
+        result = _poll_provisioning(url)
+        if result:
+            state = result.get("properties", {}).get("provisioningState", "")
+
+    print(f"  Agent Deployment: {state or 'unknown'}")
+
+
+def create_bot_service_and_channels(msa_app_id):
+    """Create Bot Service + channels via ARM REST (first-run bootstrap only).
+
+    On subsequent deploys, Bicep manages the Bot Service. This function
+    skips if the Bot Service already exists.
+    """
+    sub_id = run("az account show --query id -o tsv")
+    rg = os.environ.get("AZURE_RESOURCE_GROUP", "")
+    env_name = os.environ.get("AZURE_ENV_NAME", "")
+    base_name = env_name.lower()
+    bot_name = f"agent-bot-{base_name}"
+
+    if not sub_id or not rg:
+        print("  WARNING: Missing subscription ID or resource group — skipping")
+        return
+
+    bot_url = (
+        f"https://management.azure.com/subscriptions/{sub_id}"
+        f"/resourceGroups/{rg}"
+        f"/providers/Microsoft.BotService/botServices/{bot_name}"
+        f"?api-version=2023-09-15-preview"
+    )
+
+    # Check if our bot already exists by name
+    existing = _arm_rest("GET", bot_url)
+    if existing and isinstance(existing, dict) and existing.get("id"):
+        print(f"  Bot Service '{bot_name}' already exists — Bicep will manage it")
+        return
+
+    # Check if any bot in the RG already uses this msaAppId (e.g. portal-created)
+    list_url = (
+        f"https://management.azure.com/subscriptions/{sub_id}"
+        f"/resourceGroups/{rg}"
+        f"/providers/Microsoft.BotService/botServices"
+        f"?api-version=2023-09-15-preview"
+    )
+    bots = _arm_rest("GET", list_url)
+    if bots and isinstance(bots, dict):
+        for bot in bots.get("value", []):
+            if bot.get("properties", {}).get("msaAppId") == msa_app_id:
+                existing_name = bot.get("name", "unknown")
+                print(f"  Bot Service '{existing_name}' already uses msaAppId — adopting it")
+                azd_env_set("AGENT_BOT_NAME", existing_name)
+                return
+
+    # Build endpoint URL
+    account = os.environ.get("COGNITIVE_ACCOUNT_NAME", "")
+    project = os.environ.get("AI_FOUNDRY_PROJECT_NAME", "")
+    app_name = "salesforce-assistant"
+    endpoint = (
+        f"https://{account}.services.ai.azure.com/api/projects/{project}"
+        f"/applications/{app_name}/protocols/activityprotocol"
+        f"?api-version=2025-11-15-preview"
+    )
+
+    tenant_id = run("az account show --query tenantId -o tsv")
+
+    # Create Bot Service
+    bot_body = {
+        "location": "global",
+        "kind": "azurebot",
+        "sku": {"name": "S1"},
+        "properties": {
+            "displayName": "Salesforce Assistant",
+            "description": "Bot service for AI agent",
+            "endpoint": endpoint,
+            "msaAppId": msa_app_id,
+            "msaAppTenantId": tenant_id,
+            "msaAppType": "SingleTenant",
+        },
+    }
+
+    print(f"  Creating Bot Service '{bot_name}'...")
+    result = _arm_rest("PUT", bot_url, bot_body)
+    if not result:
+        print("  ERROR: Failed to create Bot Service")
+        return
+    print("  Bot Service created")
+    azd_env_set("AGENT_BOT_NAME", bot_name)
+
+    # Create Teams Channel
+    teams_url = (
+        f"https://management.azure.com/subscriptions/{sub_id}"
+        f"/resourceGroups/{rg}"
+        f"/providers/Microsoft.BotService/botServices/{bot_name}"
+        f"/channels/MsTeamsChannel"
+        f"?api-version=2023-09-15-preview"
+    )
+    teams_body = {
+        "location": "global",
+        "properties": {
+            "channelName": "MsTeamsChannel",
+            "properties": {
+                "isEnabled": True,
+                "deploymentEnvironment": "CommercialDeployment",
+            },
+        },
+    }
+    print("  Creating Teams Channel...")
+    result = _arm_rest("PUT", teams_url, teams_body)
+    if result:
+        print("  Teams Channel created")
+    else:
+        print("  WARNING: Failed to create Teams Channel")
+
+    # Create DirectLine Channel
+    dl_url = (
+        f"https://management.azure.com/subscriptions/{sub_id}"
+        f"/resourceGroups/{rg}"
+        f"/providers/Microsoft.BotService/botServices/{bot_name}"
+        f"/channels/DirectLineChannel"
+        f"?api-version=2023-09-15-preview"
+    )
+    dl_body = {
+        "location": "global",
+        "properties": {
+            "channelName": "DirectLineChannel",
+            "properties": {
+                "isEnabled": True,
+                "sites": [
+                    {
+                        "siteName": "Default Site",
+                        "isEnabled": True,
+                        "isV1Enabled": True,
+                        "isV3Enabled": True,
+                    }
+                ],
+            },
+        },
+    }
+    print("  Creating DirectLine Channel...")
+    result = _arm_rest("PUT", dl_url, dl_body)
+    if result:
+        print("  DirectLine Channel created")
+    else:
+        print("  WARNING: Failed to create DirectLine Channel")
+
+
+def publish_teams_app_org_wide(msa_app_id):
+    """Generate Teams app manifest and publish to org catalog via Graph API.
+
+    - Generates manifest.json with bot capability
+    - Packages as ZIP with icons
+    - POST /appCatalogs/teamsApps (or PUT to update existing)
+    - requiresReview=false for instant availability
+    """
+    import zipfile
+
+    env_name = os.environ.get("AZURE_ENV_NAME", "default")
+    developer_name = os.environ.get("TEAMS_APP_DEVELOPER_NAME", "")
+    privacy_url = os.environ.get("TEAMS_APP_PRIVACY_URL", "")
+    terms_url = os.environ.get("TEAMS_APP_TERMS_URL", "")
+
+    if not developer_name or not privacy_url or not terms_url:
+        print("  Skipping Teams org catalog publish — missing required env vars:")
+        if not developer_name:
+            print("    azd env set TEAMS_APP_DEVELOPER_NAME <company-name>")
+        if not privacy_url:
+            print("    azd env set TEAMS_APP_PRIVACY_URL <url>")
+        if not terms_url:
+            print("    azd env set TEAMS_APP_TERMS_URL <url>")
+        return
+
+    # Deterministic app ID based on environment name
+    app_external_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"salesforce-assistant-{env_name}"))
+
+    manifest = {
+        "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+        "manifestVersion": "1.19",
+        "version": "1.0.0",
+        "id": app_external_id,
+        "developer": {
+            "name": developer_name,
+            "websiteUrl": privacy_url,
+            "privacyUrl": privacy_url,
+            "termsOfUseUrl": terms_url,
+        },
+        "name": {
+            "short": "Salesforce Assistant",
+            "full": f"Salesforce Assistant ({env_name})",
+        },
+        "description": {
+            "short": "AI assistant with Salesforce access",
+            "full": "AI-powered assistant that can query and update Salesforce on your behalf using natural language.",
+        },
+        "icons": {
+            "color": "color.png",
+            "outline": "outline.png",
+        },
+        "accentColor": "#0078D4",
+        "bots": [
+            {
+                "botId": msa_app_id,
+                "scopes": ["personal", "team", "groupChat"],
+                "supportsFiles": False,
+                "isNotificationOnly": False,
+                "commandLists": [],
+            }
+        ],
+        "permissions": ["identity", "messageTeamMembers"],
+        "validDomains": [],
+    }
+
+    # Build ZIP package
+    assets_dir = os.path.join(os.getcwd(), "assets", "teams")
+    zip_path = os.path.join(tempfile.gettempdir(), "teams-app.zip")
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+        color_path = os.path.join(assets_dir, "color.png")
+        outline_path = os.path.join(assets_dir, "outline.png")
+        if os.path.exists(color_path):
+            zf.write(color_path, "color.png")
+        if os.path.exists(outline_path):
+            zf.write(outline_path, "outline.png")
+
+    print(f"  Teams app package created: {zip_path}")
+
+    # Check if app already in org catalog
+    filter_query = f"externalId eq '{app_external_id}'"
+    check_result = run(
+        f'az rest --method GET '
+        f'--url "https://graph.microsoft.com/v1.0/appCatalogs/teamsApps'
+        f'?$filter={filter_query}" '
+        f'--headers "Content-Type=application/json"',
+        parse_json=True,
+    )
+
+    existing_app_id = None
+    if check_result and isinstance(check_result, dict):
+        apps = check_result.get("value", [])
+        if apps:
+            existing_app_id = apps[0].get("id")
+
+    if existing_app_id:
+        # Update existing app
+        print(f"  Updating existing Teams app (id: {existing_app_id})...")
+        result = run(
+            f'az rest --method PUT '
+            f'--url "https://graph.microsoft.com/v1.0/appCatalogs/teamsApps/{existing_app_id}/appDefinitions" '
+            f'--headers "Content-Type=application/zip" '
+            f'--body "@{zip_path}"',
+            parse_json=True,
+        )
+        if result:
+            print("  Teams app updated in org catalog")
+        else:
+            print("  WARNING: Failed to update Teams app (may need AppCatalog.ReadWrite.All permission)")
+    else:
+        # Create new app in org catalog
+        print("  Publishing Teams app to org catalog...")
+        result = run(
+            f'az rest --method POST '
+            f'--url "https://graph.microsoft.com/v1.0/appCatalogs/teamsApps?requiresReview=false" '
+            f'--headers "Content-Type=application/zip" '
+            f'--body "@{zip_path}"',
+            parse_json=True,
+        )
+        if result:
+            new_id = result.get("id", "unknown")
+            print(f"  Teams app published to org catalog (id: {new_id})")
+        else:
+            print("  WARNING: Failed to publish Teams app (may need AppCatalog.ReadWrite.All permission)")
+
+    # Clean up
+    try:
+        os.unlink(zip_path)
+    except OSError:
+        pass
 
 
 def main():
@@ -704,8 +1152,9 @@ def main():
 
     # Step 2: Create Foundry agent
     print("\n--- Step 2: Create Foundry agent ---")
+    agent_version = None
     try:
-        create_agent()
+        agent_version = create_agent()
     except Exception as e:
         print(f"\nWARNING: Agent creation failed (non-fatal): {e}")
         print("Re-run with: python hooks/postprovision.py")
@@ -733,6 +1182,48 @@ def main():
     except Exception as e:
         print(f"\nWARNING: OBO APIM Named Values update failed (non-fatal): {e}")
         traceback.print_exc()
+
+    # Step 5: Agent Application (REST-only, can't be Bicep)
+    print("\n--- Step 5: Agent Application ---")
+    msa_app_id = None
+    try:
+        msa_app_id = create_agent_application()
+    except Exception as e:
+        print(f"\nWARNING: Agent Application creation failed (non-fatal): {e}")
+        traceback.print_exc()
+
+    # Step 6: Agent Deployment (REST-only, needs agent version)
+    if agent_version:
+        print("\n--- Step 6: Agent Deployment ---")
+        try:
+            create_agent_deployment(agent_version)
+        except Exception as e:
+            print(f"\nWARNING: Agent Deployment failed (non-fatal): {e}")
+            traceback.print_exc()
+    else:
+        print("\n--- Step 6: Agent Deployment (skipped — no agent version) ---")
+
+    # Step 7: Bot Service bootstrap (first-run only, then Bicep takes over)
+    if msa_app_id:
+        print("\n--- Step 7: Bot Service bootstrap ---")
+        try:
+            create_bot_service_and_channels(msa_app_id)
+        except Exception as e:
+            print(f"\nWARNING: Bot Service bootstrap failed (non-fatal): {e}")
+            traceback.print_exc()
+    else:
+        print("\n--- Step 7: Bot Service bootstrap (skipped — no msaAppId) ---")
+
+    # Step 8: Teams org-wide distribution (Graph API)
+    if msa_app_id:
+        print("\n--- Step 8: Teams org catalog publish ---")
+        try:
+            publish_teams_app_org_wide(msa_app_id)
+        except Exception as e:
+            print(f"\nWARNING: Teams publish failed (non-fatal): {e}")
+            traceback.print_exc()
+    else:
+        print("\n--- Step 8: Teams org catalog publish (skipped — no msaAppId) ---")
 
     print("\n=== Post-provision hook complete ===")
 

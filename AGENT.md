@@ -72,6 +72,11 @@ azd up
 | `SF_JWT_BEARER_CERT_THUMBPRINT` | Auto | Auto-set by postprovision hook from KV cert |
 | `SF_JWT_BEARER_CERT_NAME` | No | Key Vault certificate name (default: `sf-jwt-bearer`) |
 | `IDENTITY_CLAIM_NAME` | No | JWT claim for user identity (default: `oid`) |
+| `AGENT_BOT_MSA_APP_ID` | Auto | Foundry-managed identity clientId (auto-set by postprovision Step 5) |
+| `AGENT_BOT_NAME` | Auto | Bot Service resource name (auto-set by postprovision Step 7) |
+| `TEAMS_APP_DEVELOPER_NAME` | For Teams | Developer name in Teams manifest |
+| `TEAMS_APP_PRIVACY_URL` | For Teams | Privacy URL in Teams manifest |
+| `TEAMS_APP_TERMS_URL` | For Teams | Terms of use URL in Teams manifest |
 
 ### Key Paths
 
@@ -82,6 +87,7 @@ azd up
 - `infra/modules/apim-jwt-bearer-cert.bicep` — Key Vault → APIM certificate binding
 - `infra/modules/sf-obo-connection.bicep` — Foundry UserEntraToken connection
 - `infra/modules/cognitive.bicep` — AI Services account, project, App Insights connection
+- `infra/modules/bot-service.bicep` — Bot Service + Teams/DirectLine channels (conditional on msaAppId)
 - `infra/modules/keyvault.bicep` — Key Vault + APIM RBAC access
 - `infra/policies/sf-mcp-obo-policy.xml` — The OBO exchange policy (3-phase)
 - `infra/policies/sf-mcp-obo-prm-policy.xml` — RFC 9728 PRM for OBO endpoint
@@ -91,7 +97,8 @@ azd up
 - `src/chat-app/` — FastAPI + MSAL.js frontend
 
 **Hooks & Scripts:**
-- `hooks/postprovision.py` — Cert upload + Entra app + Foundry Agent + OBO connection setup
+- `hooks/postprovision.py` — Steps 0-8: cert upload, Entra app, Foundry agent, OBO connection, Agent Application, Agent Deployment, Bot Service bootstrap, Teams org catalog
+- `assets/teams/` — Teams app icons (color.png 192x192, outline.png 32x32)
 - `scripts/sf_utils.py` — Shared SF/CLI primitives (run, SOQL, metadata deploy, REST helpers)
 - `scripts/setup-sf-org.py` — Complete 5-step SF org setup orchestrator (Connected App, SSO, Demo User, Service Account, Federation IDs)
 - `scripts/test-salesforce-mcp.py` — E2E MCP server test
@@ -119,6 +126,11 @@ After setup, import PFX (private key + cert) into Azure Key Vault as `sf-jwt-bea
 1. `certs/sf-jwt-bearer.pfx` exists locally (postprovision hook uploads to KV automatically)
 2. APIM managed identity with "Key Vault Secrets User" RBAC role on KV (Bicep handles this)
 3. `SF_JWT_BEARER_CERT_THUMBPRINT` auto-set by postprovision hook (or set manually)
+
+### Teams Publishing Prerequisites
+1. `AppCatalog.ReadWrite.All` Graph API permission on deployer identity (with admin consent)
+2. Set: `TEAMS_APP_DEVELOPER_NAME`, `TEAMS_APP_PRIVACY_URL`, `TEAMS_APP_TERMS_URL`
+3. First `azd up` creates Agent Application + bootstraps Bot Service; second `azd up` lets Bicep manage the Bot Service
 
 ### IdP Flexibility
 

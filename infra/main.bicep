@@ -29,6 +29,12 @@ param sfServiceAccountUsername string = ''
 @description('Name of the JWT claim containing the user identity (oid for Azure AD, sub for Okta/PingFed)')
 param identityClaimName string = 'oid'
 
+@description('Foundry-managed identity client ID for Bot Service (set by postprovision)')
+param agentBotMsaAppId string = ''
+
+@description('Bot Service resource name (set by postprovision to adopt existing bot)')
+param agentBotName string = ''
+
 var baseName = toLower(environmentName)
 var resourceToken = toLower(uniqueString(subscription().id, baseName, location))
 var tags = {
@@ -297,6 +303,24 @@ module apimJwtBearerCert 'modules/apim-jwt-bearer-cert.bicep' = if (!empty(sfJwt
 }
 
 // ============================================================
+// Tier 5: Bot Service (conditional — needs msaAppId from previous postprovision run)
+// ============================================================
+
+module botService 'modules/bot-service.bicep' = if (!empty(agentBotMsaAppId)) {
+  name: 'bot-service'
+  scope: rg
+  params: {
+    name: baseName
+    botName: !empty(agentBotName) ? agentBotName : 'agent-bot-${baseName}'
+    cognitiveAccountName: cognitive.outputs.cognitiveAccountName
+    projectName: cognitive.outputs.projectName
+    msaAppId: agentBotMsaAppId
+    tenantId: subscription().tenantId
+    appInsightsKey: monitoring.outputs.appInsightsInstrumentationKey
+  }
+}
+
+// ============================================================
 // Outputs (become azd env vars)
 // ============================================================
 
@@ -317,5 +341,6 @@ output SF_MCP_FQDN string = sfMcpApp.outputs.sfMcpFqdn
 output SF_OBO_CONNECTION_NAME string = sfOboConnection.outputs.connectionName
 output APIM_SF_MCP_OBO_ENDPOINT string = apimSfMcpObo.outputs.sfMcpOboEndpoint
 output KEY_VAULT_NAME string = keyvault.outputs.keyVaultName
+output AGENT_BOT_NAME string = !empty(agentBotMsaAppId) ? botService.outputs.botServiceName : '' // BCP318 is expected — conditional module
 // CHAT_APP_ENTRA_CLIENT_ID set by postprovision hook
 // (Entra apps created via az CLI, not Bicep)

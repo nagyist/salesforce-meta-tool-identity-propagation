@@ -483,10 +483,64 @@ def update_obo_connection():
         os.unlink(body_file)
 
 
+def create_memory_store(project_client):
+    """Create the project-memory store (idempotent — get-or-create).
+
+    Uses text-embedding-3-small for embeddings and gpt-5.4 for chat summaries.
+    Returns the store name on success, None on failure.
+    """
+    from azure.ai.projects.models import (
+        MemoryStoreDefaultDefinition,
+        MemoryStoreDefaultOptions,
+    )
+
+    store_name = "project-memory"
+    print(f"\n  Creating memory store '{store_name}'...")
+
+    # Check if store already exists
+    try:
+        existing = project_client.memory_stores.get(name=store_name)
+        if existing:
+            print(f"  Memory store already exists: {store_name}")
+            return store_name
+    except Exception:
+        pass  # Store doesn't exist — create it
+
+    # Retry with backoff (same propagation delay as agent creation)
+    max_retries = 4
+    retry_delay = 10
+    for attempt in range(max_retries):
+        try:
+            project_client.memory_stores.create(
+                name=store_name,
+                definition=MemoryStoreDefaultDefinition(
+                    chat_model="gpt-5.4",
+                    embedding_model="text-embedding-3-small",
+                    options=MemoryStoreDefaultOptions(
+                        user_profile_enabled=True,
+                        chat_summary_enabled=True,
+                        user_profile_details="Salesforce user. Track their common objects, field names, query patterns, role, department, and error patterns.",
+                    ),
+                ),
+            )
+            print(f"  Memory store created: {store_name}")
+            return store_name
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"  Attempt {attempt + 1}/{max_retries}: {e}")
+                print(f"  Retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 60)
+            else:
+                print(f"  WARNING: Failed to create memory store: {e}")
+                return None
+
+
 def create_agent():
     """Create a Foundry agent with the Salesforce MCP tool using the v2 SDK.
 
     Uses the OBO connection (UserEntraToken) and the OBO APIM endpoint.
+    Includes MemorySearchTool for per-user conversational memory.
     """
     project_endpoint = os.environ.get("AI_FOUNDRY_PROJECT_ENDPOINT")
 
@@ -512,9 +566,7 @@ def create_agent():
     from azure.identity import DefaultAzureCredential
     from azure.ai.projects import AIProjectClient
     from azure.ai.projects.models import (
-        PromptAgentDefinition, MCPTool,
-        MCPToolRequireApproval1, MCPToolRequireApprovalAlways,
-        MCPToolRequireApprovalNever,
+        PromptAgentDefinition, MCPTool, MemorySearchTool,
     )
 
     credential = DefaultAzureCredential()
@@ -530,18 +582,7 @@ def create_agent():
     sf_tool_kwargs = {
         "server_label": "salesforce_mcp",
         "server_url": sf_mcp_endpoint,
-        "require_approval": MCPToolRequireApproval1(
-            never=MCPToolRequireApprovalNever(tool_names=[
-                "list_objects",
-                "describe_object",
-                "soql_query",
-                "search_records",
-            ]),
-            always=MCPToolRequireApprovalAlways(tool_names=[
-                "write_record",
-                "process_approval",
-            ]),
-        ),
+        "require_approval": "never",
         "allowed_tools": [
             "list_objects",
             "describe_object",
@@ -559,14 +600,34 @@ def create_agent():
     sf_mcp_tool = MCPTool(**sf_tool_kwargs)
     tools = [sf_mcp_tool]
 
+    # Create memory store and add MemorySearchTool
+    store_name = create_memory_store(project_client)
+    if store_name:
+        memory_tool = MemorySearchTool(
+            memory_store_name=store_name,
+            scope="{{$userId}}",
+            update_delay=30,
+        )
+        tools.append(memory_tool)
+        print(f"  MemorySearchTool added (store={store_name}, scope=per-user)")
+
     instructions = """\
 You are an assistant with access to Salesforce via MCP tools.
+
+## Memory
+You have access to a memory store that remembers details from past conversations with each user.
+- Before calling describe_object for read queries, check memory — you may already know the \
+user's common objects, field names, filters, and query patterns.
+- ALWAYS call describe_object(mode="full") before writes regardless of memory — picklist \
+values and validation rules can change at any time.
+- Memory is automatically populated from conversations. No explicit save is needed.
 
 ## Workflow
 1. Plan — tell the user what you intend to do before calling tools.
 2. list_objects — find the API name (use `name`, not `label`).
 3. describe_object — REQUIRED before create/update/upsert/delete (use mode="full").
-   For reads, skip if you know the fields, or use mode="slim" to discover fields and relationships.
+   For reads, skip if you know the fields (from memory or prior turns), or use mode="slim" \
+to discover fields and relationships.
    Slim returns referenceTo (lookup targets) and childRelationships (for subqueries).
 4. Execute — soql_query, search_records, write_record, or process_approval.
 5. Summarize — present results in plain language. Do NOT dump raw JSON.
@@ -586,7 +647,8 @@ Check childRelationships on the parent object for an alternative path (subquery)
 
 ## Rules
 - Do NOT guess field names — use describe_object (slim for reads, full for writes).
-- ALWAYS confirm with the user before delete or reject operations.
+- ALWAYS confirm with the user before any create, update, upsert, or delete operation.
+  Describe the exact change (object, record, fields, values) and wait for explicit approval.
 - Always include LIMIT in SOQL unless the user specifically requests all rows.
 - All API names are PascalCase: Account, OpportunityLineItem, Custom_Field__c.
 - For subqueries use relationshipName from childRelationships, not the object name.
@@ -607,7 +669,7 @@ Check childRelationships on the parent object for an alternative path (subquery)
                 ),
             )
             print(f"Agent created: name={agent.name}, version={agent.version}, id={agent.id}")
-            print(f"  Tools: {len(tools)} MCP tool(s) configured")
+            print(f"  Tools: {len(tools)} tool(s) configured")
             print("\nOBO flow requires no consent. Send a chat message to test.")
             print(f"Agent: {agent.name} v{agent.version}")
             return

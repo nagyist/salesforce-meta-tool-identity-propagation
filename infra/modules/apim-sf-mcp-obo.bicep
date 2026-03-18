@@ -1,7 +1,7 @@
 // ============================================================================
-// Module: APIM Salesforce MCP OBO Reverse Proxy
-// Same backend as the existing SF MCP API, but with Azure AD token validation
-// and JWT Bearer token exchange (On-Behalf-Of) instead of SF JWT passthrough.
+// Module: APIM Salesforce MCP OBO (native MCP type)
+// Uses APIM's native 'mcp' API type with a backend resource pointing to the
+// SF MCP Container App. Azure AD token validation and JWT Bearer OBO exchange.
 //
 // APIM validates the Azure AD token, creates a JWT Bearer assertion signed
 // with a Key Vault certificate, exchanges it at the SF token endpoint, and
@@ -116,52 +116,41 @@ resource identityClaimNameNV 'Microsoft.ApiManagement/service/namedValues@2024-0
 }
 
 // --------------------------------------------------------------------------
-// Salesforce MCP OBO API (HTTP reverse proxy with OBO token exchange)
+// Backend — points APIM to the SF MCP Container App
+// --------------------------------------------------------------------------
+resource sfMcpBackend 'Microsoft.ApiManagement/service/backends@2024-06-01-preview' = {
+  parent: apim
+  name: 'sf-mcp-backend'
+  properties: {
+    url: 'https://${sfMcpFqdn}'
+    protocol: 'http'
+    title: 'Salesforce MCP Server'
+  }
+}
+
+// --------------------------------------------------------------------------
+// Salesforce MCP OBO API (native MCP type with OBO token exchange)
 // --------------------------------------------------------------------------
 resource sfMcpOboApi 'Microsoft.ApiManagement/service/apis@2024-06-01-preview' = {
   parent: apim
   name: 'salesforce-mcp-obo'
   properties: {
     displayName: 'Salesforce MCP Server (OBO)'
-    description: 'Reverse proxy for Salesforce MCP server with Azure AD → SF JWT Bearer OBO exchange.'
+    description: 'Native MCP API with Azure AD → SF JWT Bearer OBO exchange.'
     path: 'salesforce-mcp-obo'
     protocols: [
       'https'
     ]
-    serviceUrl: 'https://${sfMcpFqdn}'
     subscriptionRequired: false
-    apiType: 'http'
-  }
-}
-
-// Wildcard operations — route all HTTP methods to the SF MCP backend
-resource sfMcpOboPostOp 'Microsoft.ApiManagement/service/apis/operations@2024-06-01-preview' = {
-  parent: sfMcpOboApi
-  name: 'sf-mcp-obo-post'
-  properties: {
-    displayName: 'POST (all paths)'
-    method: 'POST'
-    urlTemplate: '/*'
-  }
-}
-
-resource sfMcpOboGetOp 'Microsoft.ApiManagement/service/apis/operations@2024-06-01-preview' = {
-  parent: sfMcpOboApi
-  name: 'sf-mcp-obo-get'
-  properties: {
-    displayName: 'GET (all paths)'
-    method: 'GET'
-    urlTemplate: '/*'
-  }
-}
-
-resource sfMcpOboDeleteOp 'Microsoft.ApiManagement/service/apis/operations@2024-06-01-preview' = {
-  parent: sfMcpOboApi
-  name: 'sf-mcp-obo-delete'
-  properties: {
-    displayName: 'DELETE (all paths)'
-    method: 'DELETE'
-    urlTemplate: '/*'
+    type: 'mcp'
+    backendId: sfMcpBackend.name
+    mcpProperties: {
+      endpoints: {
+        mcp: {
+          uriTemplate: '/mcp'
+        }
+      }
+    }
   }
 }
 

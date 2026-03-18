@@ -94,13 +94,31 @@ resource gpt54 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   name: 'gpt-5.4'
   sku: {
     name: 'GlobalStandard'
-    capacity: 60
+    capacity: 120
   }
   properties: {
     model: {
       format: 'OpenAI'
       name: 'gpt-5.4'
       version: '2026-03-05'
+    }
+  }
+}
+
+// --- text-embedding-3-small Deployment (for agent memory) ---
+resource embedding 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: cognitiveAccount
+  name: 'text-embedding-3-small'
+  dependsOn: [gpt54]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 120
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'text-embedding-3-small'
+      version: '1'
     }
   }
 }
@@ -137,3 +155,4 @@ output openaiEndpoint string = cognitiveAccount.properties.endpoints['OpenAI Lan
 output projectId string = project.id
 output projectName string = project.name
 output projectEndpoint string = 'https://${cognitiveAccount.name}.services.ai.azure.com/api/projects/${project.name}'
+output embeddingDeploymentName string = embedding.name

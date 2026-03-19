@@ -917,16 +917,18 @@ def create_bot_service_and_channels(msa_app_id):
                 azd_env_set("AGENT_BOT_NAME", existing_name)
                 return
 
-    # Build endpoint URL — points to chat app's Bot Framework endpoint
-    chat_app_fqdn = os.environ.get("CHAT_APP_FQDN", "")
-    if not chat_app_fqdn:
-        chat_app_url = os.environ.get("CHAT_APP_URL", "")
-        if chat_app_url:
-            chat_app_fqdn = chat_app_url.replace("https://", "").replace("http://", "")
-    if not chat_app_fqdn:
-        print("  WARNING: CHAT_APP_FQDN not set — cannot build bot endpoint")
+    # Build endpoint URL — Foundry activity protocol
+    account = os.environ.get("COGNITIVE_ACCOUNT_NAME", "")
+    project = os.environ.get("AI_FOUNDRY_PROJECT_NAME", "")
+    app_name = "salesforce-assistant"
+    if not account or not project:
+        print("  WARNING: COGNITIVE_ACCOUNT_NAME or AI_FOUNDRY_PROJECT_NAME not set")
         return
-    endpoint = f"https://{chat_app_fqdn}/api/messages"
+    endpoint = (
+        f"https://{account}.services.ai.azure.com/api/projects/{project}"
+        f"/applications/{app_name}/protocols/activityprotocol"
+        f"?api-version=2025-11-15-preview"
+    )
 
     tenant_id = run("az account show --query tenantId -o tsv")
 

@@ -319,7 +319,8 @@ module botService 'modules/bot-service.bicep' = if (!empty(agentBotMsaAppId)) {
   params: {
     name: baseName
     botName: !empty(agentBotName) ? agentBotName : 'agent-bot-${baseName}'
-    chatAppFqdn: chatApp.outputs.chatAppFqdn
+    cognitiveAccountName: cognitive.outputs.cognitiveAccountName
+    projectName: cognitive.outputs.projectName
     msaAppId: agentBotMsaAppId
     tenantId: subscription().tenantId
     appInsightsKey: monitoring.outputs.appInsightsInstrumentationKey

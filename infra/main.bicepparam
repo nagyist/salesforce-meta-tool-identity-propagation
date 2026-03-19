@@ -11,3 +11,4 @@ param sfServiceAccountUsername = readEnvironmentVariable('SF_SERVICE_ACCOUNT_USE
 param identityClaimName = readEnvironmentVariable('IDENTITY_CLAIM_NAME', 'oid')
 param agentBotMsaAppId = readEnvironmentVariable('AGENT_BOT_MSA_APP_ID', '')
 param agentBotName = readEnvironmentVariable('AGENT_BOT_NAME', '')
+param chatAppEntraClientId = readEnvironmentVariable('CHAT_APP_ENTRA_CLIENT_ID', '')

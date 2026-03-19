@@ -35,6 +35,9 @@ param agentBotMsaAppId string = ''
 @description('Bot Service resource name (set by postprovision to adopt existing bot)')
 param agentBotName string = ''
 
+@description('Chat App Entra client ID (set by postprovision)')
+param chatAppEntraClientId string = ''
+
 var baseName = toLower(environmentName)
 var resourceToken = toLower(uniqueString(subscription().id, baseName, location))
 var tags = {
@@ -162,6 +165,10 @@ module chatApp 'modules/chat-app.bicep' = {
     containerAppsEnvironmentId: containerEnv.outputs.containerAppsEnvironmentId
     projectEndpoint: cognitive.outputs.projectEndpoint
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    chatAppEntraClientId: chatAppEntraClientId
+    tenantId: subscription().tenantId
+    logAnalyticsWorkspaceGuid: monitoring.outputs.logAnalyticsWorkspaceGuid
+    agentBotMsaAppId: agentBotMsaAppId
   }
 }
 
@@ -312,8 +319,7 @@ module botService 'modules/bot-service.bicep' = if (!empty(agentBotMsaAppId)) {
   params: {
     name: baseName
     botName: !empty(agentBotName) ? agentBotName : 'agent-bot-${baseName}'
-    cognitiveAccountName: cognitive.outputs.cognitiveAccountName
-    projectName: cognitive.outputs.projectName
+    chatAppFqdn: chatApp.outputs.chatAppFqdn
     msaAppId: agentBotMsaAppId
     tenantId: subscription().tenantId
     appInsightsKey: monitoring.outputs.appInsightsInstrumentationKey
@@ -341,6 +347,7 @@ output SF_MCP_FQDN string = sfMcpApp.outputs.sfMcpFqdn
 output SF_OBO_CONNECTION_NAME string = sfOboConnection.outputs.connectionName
 output APIM_SF_MCP_OBO_ENDPOINT string = apimSfMcpObo.outputs.sfMcpOboEndpoint
 output KEY_VAULT_NAME string = keyvault.outputs.keyVaultName
+output LOG_ANALYTICS_WORKSPACE_ID string = monitoring.outputs.logAnalyticsWorkspaceGuid
 output AGENT_BOT_NAME string = !empty(agentBotMsaAppId) ? botService.outputs.botServiceName : '' // BCP318 is expected — conditional module
 // CHAT_APP_ENTRA_CLIENT_ID set by postprovision hook
 // (Entra apps created via az CLI, not Bicep)

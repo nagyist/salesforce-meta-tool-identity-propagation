@@ -4,14 +4,8 @@ param name string
 @description('Bot Service resource name (override to adopt an existing bot)')
 param botName string = 'agent-bot-${name}'
 
-@description('Cognitive Services account name (for endpoint URL)')
-param cognitiveAccountName string
-
-@description('Foundry project name (for endpoint URL)')
-param projectName string
-
-@description('Agent Application name')
-param applicationName string = 'salesforce-assistant'
+@description('Chat App FQDN for the bot endpoint (POST /api/messages)')
+param chatAppFqdn string
 
 @description('Foundry-managed identity client ID (from Agent Application)')
 param msaAppId string
@@ -31,7 +25,7 @@ resource botService 'Microsoft.BotService/botServices@2023-09-15-preview' = {
   properties: {
     displayName: 'Salesforce Assistant'
     description: 'Bot service for AI agent'
-    endpoint: 'https://${cognitiveAccountName}.services.ai.azure.com/api/projects/${projectName}/applications/${applicationName}/protocols/activityprotocol?api-version=2025-11-15-preview'
+    endpoint: 'https://${chatAppFqdn}/api/messages'
     msaAppId: msaAppId
     msaAppTenantId: tenantId
     msaAppType: 'SingleTenant'

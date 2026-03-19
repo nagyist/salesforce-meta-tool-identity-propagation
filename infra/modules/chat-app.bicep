@@ -22,6 +22,18 @@ param projectEndpoint string
 @description('Application Insights connection string')
 param appInsightsConnectionString string = ''
 
+@description('Chat App Entra client ID (set by postprovision)')
+param chatAppEntraClientId string = ''
+
+@description('Azure AD tenant ID')
+param tenantId string = ''
+
+@description('Log Analytics workspace GUID for debug log tail')
+param logAnalyticsWorkspaceGuid string = ''
+
+@description('Bot Service managed identity app ID')
+param agentBotMsaAppId string = ''
+
 // Look up registry to get admin credentials
 resource registry 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' existing = {
   name: registryName
@@ -92,6 +104,30 @@ resource chatApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'OTEL_SERVICE_NAME'
               value: 'chat-app'
             }
+            ...(!empty(chatAppEntraClientId) ? [
+              {
+                name: 'CHAT_APP_ENTRA_CLIENT_ID'
+                value: chatAppEntraClientId
+              }
+            ] : [])
+            ...(!empty(tenantId) ? [
+              {
+                name: 'TENANT_ID'
+                value: tenantId
+              }
+            ] : [])
+            ...(!empty(logAnalyticsWorkspaceGuid) ? [
+              {
+                name: 'LOG_ANALYTICS_WORKSPACE_ID'
+                value: logAnalyticsWorkspaceGuid
+              }
+            ] : [])
+            ...(!empty(agentBotMsaAppId) ? [
+              {
+                name: 'AGENT_BOT_MSA_APP_ID'
+                value: agentBotMsaAppId
+              }
+            ] : [])
           ]
         }
       ]

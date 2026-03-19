@@ -92,9 +92,16 @@ azd up
 - `infra/policies/sf-mcp-obo-policy.xml` — The OBO exchange policy (3-phase)
 - `infra/policies/sf-mcp-obo-prm-policy.xml` — RFC 9728 PRM for OBO endpoint
 
-**Application (unchanged between modes):**
+**Application:**
 - `src/salesforce-mcp/` — MCP server (7 tools, bearer passthrough)
-- `src/chat-app/` — FastAPI + MSAL.js frontend
+- `src/chat-app/` — FastAPI backend + vanilla JS SPA with:
+  - MSAL.js auth (redirect fallback, not popup — COOP compat)
+  - Tool panel sidebar (waterfall timeline, stats, export)
+  - Debug panel (App Insights log tail + instant local logs)
+  - Markdown rendering (marked.js, bundled locally)
+  - Memory search visibility (Foundry MemorySearchTool results)
+  - Teams Bot Framework endpoint (`POST /api/messages`)
+- `src/shared/foundry_helpers.py` — shared agent call helpers (used by web chat + Teams bot)
 
 **Hooks & Scripts:**
 - `hooks/postprovision.py` — Steps 0-8: cert upload, Entra app, Foundry agent, OBO connection, Agent Application, Agent Deployment, Bot Service bootstrap, Teams org catalog

@@ -4,45 +4,100 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Salesforce MCP Chat</title>
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/style.css?v=6">
 </head>
 <body>
     <div class="header">
-        <h1>Salesforce MCP Chat</h1>
+        <div class="header-left">
+            <h1>Salesforce MCP Chat</h1>
+            <button id="newChatBtn" class="new-chat-btn" style="display: none" onclick="startNewChat()" title="New Chat (Ctrl+Shift+N)">+ New Chat</button>
+            <div id="sessionChips" class="session-chips"></div>
+        </div>
         <div class="header-right">
             <span class="user-info" id="userInfo"></span>
+            <button id="debugToggleBtn" class="header-icon-btn" title="Debug Panel (Ctrl+Shift+D)" style="display: none" onclick="toggleDebugPanel()">D</button>
+            <button id="toolPanelToggleBtn" class="header-icon-btn" title="Tool Panel (Ctrl+Shift+T)" style="display: none" onclick="toggleToolPanel()"><span>T</span><span id="toolBadge" class="tool-badge" style="display: none">0</span></button>
             <button class="auth-btn" id="authBtn" onclick="handleAuth()">Sign in</button>
         </div>
     </div>
 
-    <div class="chat-container" id="chatContainer">
-        <div class="welcome" id="welcome">
-            <h2>Salesforce Agent</h2>
-            <p>Sign in with your Microsoft account and ask the agent about your Salesforce data. Your identity propagates end-to-end through the AI agent to Salesforce.</p>
-            <div class="suggestions" id="suggestions" style="display: none;">
-                <button class="suggestion-chip" onclick="useSuggestion(this.textContent)">List my Salesforce accounts</button>
-                <button class="suggestion-chip" onclick="useSuggestion(this.textContent)">Show my open opportunities</button>
-                <button class="suggestion-chip" onclick="useSuggestion(this.textContent)">Search for a contact by name</button>
-                <button class="suggestion-chip" onclick="useSuggestion(this.textContent)">What objects can I access?</button>
+    <div class="app-body">
+        <div class="main-area">
+            <div class="chat-container" id="chatContainer">
+                <div class="welcome" id="welcome">
+                    <h2>Salesforce Agent</h2>
+                    <p>Sign in with your Microsoft account and ask the agent about your Salesforce data. Your identity propagates end-to-end through the AI agent to Salesforce.</p>
+                    <div class="suggestions" id="suggestions" style="display: none;">
+                        <button class="suggestion-chip" onclick="useSuggestion(this.textContent)">List my Salesforce accounts</button>
+                        <button class="suggestion-chip" onclick="useSuggestion(this.textContent)">Show my open opportunities</button>
+                        <button class="suggestion-chip" onclick="useSuggestion(this.textContent)">Search for a contact by name</button>
+                        <button class="suggestion-chip" onclick="useSuggestion(this.textContent)">What objects can I access?</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="smartSuggestions" class="smart-suggestions" style="display: none;"></div>
+
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <textarea
+                        id="messageInput"
+                        placeholder="Ask about Salesforce data..."
+                        rows="1"
+                        onkeydown="handleKeyDown(event)"
+                        disabled
+                    ></textarea>
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="tool-panel" id="toolPanel">
+            <div class="tool-panel-header">
+                <span class="tool-panel-title">Tool Activity</span>
+                <button class="tool-panel-close" onclick="toggleToolPanel()" title="Close">&times;</button>
+            </div>
+            <div id="toolStats" class="tool-stats">
+                <span id="statCalls">0 calls</span>
+                <span class="stat-sep">|</span>
+                <span id="statTools">0 tools</span>
+                <span class="stat-sep">|</span>
+                <span id="statTime">0.0s</span>
+                <span class="stat-sep">|</span>
+                <span id="statErrors">0 errors</span>
+            </div>
+            <div id="toolTimeline" class="tool-timeline"></div>
+            <div id="perfProfile" class="perf-profile"></div>
+            <div class="tool-panel-footer">
+                <button class="export-btn" onclick="exportMarkdown()">Export MD</button>
+                <button class="export-btn" onclick="exportHtmlReplay()">Export Replay</button>
             </div>
         </div>
     </div>
 
-    <div class="input-area">
-        <div class="input-wrapper">
-            <textarea
-                id="messageInput"
-                placeholder="Ask about Salesforce data..."
-                rows="1"
-                onkeydown="handleKeyDown(event)"
-                disabled
-            ></textarea>
-            <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+    <div class="debug-panel" id="debugPanel" style="display: none;">
+        <div class="debug-resize-handle" id="debugResizeHandle"></div>
+        <div class="debug-header">
+            <div class="debug-tabs">
+                <button class="debug-tab active" data-filter="all" onclick="setDebugFilter('all', this)">All</button>
+                <button class="debug-tab" data-filter="chat" onclick="setDebugFilter('chat', this)">Chat</button>
+                <button class="debug-tab" data-filter="agnt" onclick="setDebugFilter('agnt', this)">Agent</button>
+                <button class="debug-tab" data-filter="mcp" onclick="setDebugFilter('mcp', this)">MCP</button>
+                <button class="debug-tab" data-filter="apim" onclick="setDebugFilter('apim', this)">APIM</button>
+            </div>
+            <input type="text" id="debugSearch" class="debug-search" placeholder="Filter logs..." oninput="filterDebugLogs()">
+            <button class="debug-action-btn" onclick="fetchDebugLogs()" title="Fetch server logs">Fetch</button>
+            <button id="debugAutoScrollBtn" class="debug-action-btn active" onclick="toggleDebugAutoScroll()" title="Auto-scroll">Auto</button>
+            <button class="debug-action-btn" onclick="clearDebugLogs()" title="Clear">Clear</button>
+            <button class="debug-action-btn" onclick="toggleDebugPanel()" title="Close">&times;</button>
         </div>
+        <div class="debug-disclaimer">Logs may be delayed 2-5 min (App Insights ingestion latency)</div>
+        <div id="debugLogs" class="debug-logs"></div>
     </div>
 
+    <script src="/marked.min.js"></script>
     <script src="https://alcdn.msauth.net/browser/2.38.2/js/msal-browser.min.js"></script>
     <script src="https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js"></script>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=6"></script>
 </body>
 </html>

@@ -346,14 +346,22 @@ def update_chat_app_settings():
         return
 
     agent_name = "salesforce-assistant"
+    log_ws_id = os.environ.get("LOG_ANALYTICS_WORKSPACE_ID", "")
+    bot_msa_app_id = os.environ.get("AGENT_BOT_MSA_APP_ID", "")
 
     print(f"  Updating {chat_app_name} environment variables...")
-    result = run(
-        f'az containerapp update --name {chat_app_name} --resource-group {rg} '
-        f'--set-env-vars '
+    env_vars = (
         f'"CHAT_APP_ENTRA_CLIENT_ID={client_id}" '
         f'"TENANT_ID={tenant_id}" '
-        f'"AGENT_NAME={agent_name}"',
+        f'"AGENT_NAME={agent_name}"'
+    )
+    if log_ws_id:
+        env_vars += f' "LOG_ANALYTICS_WORKSPACE_ID={log_ws_id}"'
+    if bot_msa_app_id:
+        env_vars += f' "AGENT_BOT_MSA_APP_ID={bot_msa_app_id}"'
+    result = run(
+        f'az containerapp update --name {chat_app_name} --resource-group {rg} '
+        f'--set-env-vars {env_vars}',
     )
     if result is not None:
         print("  Container App env vars updated")
@@ -631,8 +639,9 @@ values and validation rules can change at any time.
 
 ## Workflow
 1. Plan — tell the user what you intend to do before calling tools.
-2. whoami — if the user says "my" or refers to themselves, call this FIRST \
-to get their UserId. Use it as OwnerId or CreatedById in SOQL WHERE clauses.
+2. whoami — if the user says "my" or refers to themselves, check memory first \
+for their UserId/OwnerId. Only call whoami if it is not in memory. \
+Use UserId as OwnerId or CreatedById in SOQL WHERE clauses.
 3. list_objects — find the API name (use `name`, not `label`).
 4. describe_object — REQUIRED before create/update/upsert/delete (use mode="full").
    For reads, skip if you know the fields (from memory or prior turns), or use mode="slim" \
@@ -908,15 +917,16 @@ def create_bot_service_and_channels(msa_app_id):
                 azd_env_set("AGENT_BOT_NAME", existing_name)
                 return
 
-    # Build endpoint URL
-    account = os.environ.get("COGNITIVE_ACCOUNT_NAME", "")
-    project = os.environ.get("AI_FOUNDRY_PROJECT_NAME", "")
-    app_name = "salesforce-assistant"
-    endpoint = (
-        f"https://{account}.services.ai.azure.com/api/projects/{project}"
-        f"/applications/{app_name}/protocols/activityprotocol"
-        f"?api-version=2025-11-15-preview"
-    )
+    # Build endpoint URL — points to chat app's Bot Framework endpoint
+    chat_app_fqdn = os.environ.get("CHAT_APP_FQDN", "")
+    if not chat_app_fqdn:
+        chat_app_url = os.environ.get("CHAT_APP_URL", "")
+        if chat_app_url:
+            chat_app_fqdn = chat_app_url.replace("https://", "").replace("http://", "")
+    if not chat_app_fqdn:
+        print("  WARNING: CHAT_APP_FQDN not set — cannot build bot endpoint")
+        return
+    endpoint = f"https://{chat_app_fqdn}/api/messages"
 
     tenant_id = run("az account show --query tenantId -o tsv")
 

@@ -860,7 +860,7 @@ def create_agent_deployment(agent_version):
     result = _arm_rest("PUT", url, body)
     if not result:
         print("  ERROR: Failed to create Agent Deployment")
-        return
+        return None
 
     # Check if already provisioned
     state = result.get("properties", {}).get("provisioningState", "")
@@ -869,7 +869,50 @@ def create_agent_deployment(agent_version):
         if result:
             state = result.get("properties", {}).get("provisioningState", "")
 
-    print(f"  Agent Deployment: {state or 'unknown'}")
+    deployment_id = result.get("properties", {}).get("deploymentId", "") if result else ""
+    print(f"  Agent Deployment: {state or 'unknown'} (deploymentId: {deployment_id})")
+
+    # Update Application traffic routing to point to this deployment.
+    # Without this, the Activity Protocol (Teams/Copilot) routes to a stale
+    # deployment ID and returns "Sorry, I wasn't able to respond".
+    if deployment_id:
+        _update_traffic_routing(app_name, deployment_id, api_version)
+
+    return deployment_id
+
+
+def _update_traffic_routing(app_name, deployment_id, api_version):
+    """Update Agent Application trafficRoutingPolicy to route to the given deployment."""
+    base = _arm_project_base()
+    url = f"{base}/applications/{app_name}?api-version={api_version}"
+
+    body = {
+        "properties": {
+            "trafficRoutingPolicy": {
+                "protocol": "FixedRatio",
+                "rules": [
+                    {
+                        "ruleId": "default",
+                        "deploymentId": deployment_id,
+                        "trafficPercentage": 100,
+                    }
+                ],
+            },
+        }
+    }
+
+    print(f"  Updating traffic routing -> deploymentId={deployment_id}...")
+    result = _arm_rest("PUT", url, body)
+    if result:
+        routed = (
+            result.get("properties", {})
+            .get("trafficRoutingPolicy", {})
+            .get("rules", [{}])[0]
+            .get("deploymentId", "")
+        )
+        print(f"  Traffic routing updated (routed to: {routed})")
+    else:
+        print("  WARNING: Failed to update traffic routing")
 
 
 def create_bot_service_and_channels(msa_app_id):

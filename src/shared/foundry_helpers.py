@@ -30,11 +30,16 @@ class UserTokenCredential:
         return AccessToken(self._token, 0)
 
 
-def create_foundry_client(access_token: str):
-    """Create an AIProjectClient authenticated with the user's token."""
+def create_foundry_client(access_token: str, project_endpoint: str = None):
+    """Create an AIProjectClient authenticated with the user's token.
+
+    Args:
+        access_token: User's Azure AD bearer token
+        project_endpoint: Override for AI_FOUNDRY_PROJECT_ENDPOINT env var
+    """
     from azure.ai.projects import AIProjectClient
 
-    endpoint = os.environ.get("AI_FOUNDRY_PROJECT_ENDPOINT", "")
+    endpoint = project_endpoint or os.environ.get("AI_FOUNDRY_PROJECT_ENDPOINT", "")
     if not endpoint:
         raise ValueError("AI_FOUNDRY_PROJECT_ENDPOINT not configured")
 
@@ -145,7 +150,8 @@ def parse_output_items(output_items, request_id: str = ""):
 
 
 async def call_agent(access_token: str, message: str, previous_response_id: str = None,
-                     agent_name: str = None, timeout: float = 120) -> dict:
+                     agent_name: str = None, project_endpoint: str = None,
+                     timeout: float = 120) -> dict:
     """Send a message to the Foundry agent and return the parsed response.
 
     Args:
@@ -153,6 +159,7 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
         message: User message text
         previous_response_id: For multi-turn conversations
         agent_name: Agent name (default: from AGENT_NAME env var)
+        project_endpoint: Override for AI_FOUNDRY_PROJECT_ENDPOINT env var
         timeout: Request timeout in seconds
 
     Returns:
@@ -164,7 +171,7 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
 
     logger.info("agent_call request_id=%s agent=%s", request_id, agent_name)
 
-    project_client = create_foundry_client(access_token)
+    project_client = create_foundry_client(access_token, project_endpoint)
     openai_client = project_client.get_openai_client()
 
     try:
@@ -208,7 +215,7 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
 
 async def approve_tools(access_token: str, previous_response_id: str,
                         approval_ids: list, approve: bool = True,
-                        agent_name: str = None,
+                        agent_name: str = None, project_endpoint: str = None,
                         timeout: float = 120) -> dict:
     """Approve or deny MCP tool calls and continue the conversation.
 
@@ -218,6 +225,7 @@ async def approve_tools(access_token: str, previous_response_id: str,
         approval_ids: List of approval request IDs to approve/deny
         approve: True to approve, False to deny
         agent_name: Agent name (default: from AGENT_NAME env var)
+        project_endpoint: Override for AI_FOUNDRY_PROJECT_ENDPOINT env var
         timeout: Request timeout in seconds
 
     Returns:
@@ -225,7 +233,7 @@ async def approve_tools(access_token: str, previous_response_id: str,
     """
     agent_name = agent_name or os.environ.get("AGENT_NAME", "salesforce-assistant")
 
-    project_client = create_foundry_client(access_token)
+    project_client = create_foundry_client(access_token, project_endpoint)
     openai_client = project_client.get_openai_client()
 
     try:

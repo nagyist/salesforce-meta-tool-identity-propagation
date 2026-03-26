@@ -38,6 +38,12 @@ param agentBotName string = ''
 @description('Chat App Entra client ID (set by postprovision)')
 param chatAppEntraClientId string = ''
 
+@description('Multi-agent config JSON (set via azd env set AGENTS_CONFIG)')
+param agentsConfig string = ''
+
+@description('Foundry projects JSON for dynamic agent discovery')
+param foundryProjects string = ''
+
 var baseName = toLower(environmentName)
 var resourceToken = toLower(uniqueString(subscription().id, baseName, location))
 var tags = {
@@ -169,6 +175,8 @@ module chatApp 'modules/chat-app.bicep' = {
     tenantId: subscription().tenantId
     logAnalyticsWorkspaceGuid: monitoring.outputs.logAnalyticsWorkspaceGuid
     agentBotMsaAppId: agentBotMsaAppId
+    agentsConfig: agentsConfig
+    foundryProjects: foundryProjects
   }
 }
 
@@ -267,6 +275,15 @@ module chatAppCognitiveContributor 'modules/role-assignment.bicep' = {
     cognitiveAccountName: cognitive.outputs.cognitiveAccountName
     principalId: chatApp.outputs.chatAppPrincipalId
     roleDefinitionId: '25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68' // Cognitive Services Contributor
+  }
+}
+
+// Subscription-level Reader for dynamic Foundry project discovery via Resource Graph
+module chatAppSubscriptionReader 'modules/subscription-role-assignment.bicep' = {
+  name: 'chat-app-subscription-reader'
+  params: {
+    principalId: chatApp.outputs.chatAppPrincipalId
+    roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
   }
 }
 

@@ -10,8 +10,28 @@ This file provides guidance to code agents when working with this repository.
 
 ## Architecture
 
+### Multi-Agent Headless Chat App
+
 ```
-User → Chat App (MSAL.js) → AI Foundry Agent
+User → Chat App (MSAL.js) → Sign in
+  → GET /api/agents (auth required)
+    → Azure Resource Graph (managed identity) → discover all Foundry projects
+    → AIProjectClient.agents.list() per project → discover all agents
+  → Agent selector UI (project → agent cards)
+  → POST /api/chat { agent_name, project_endpoint, message }
+  → AI Foundry Agent (any project, any agent)
+```
+
+The chat app is **agent-agnostic** — it works with any AI Foundry agent across any project in the subscription. Agent discovery is fully dynamic:
+1. **Resource Graph** finds all `Microsoft.CognitiveServices/accounts/projects`
+2. **Foundry SDK** lists agents in each project
+3. **Frontend** shows project → agent selector with business-oriented prompts
+4. **5-min cache** avoids repeated API calls
+
+### Salesforce OBO Flow (per-agent)
+
+```
+AI Foundry Agent (salesforce-assistant)
   → Foundry acquires Azure AD token (UserEntraToken connection)
   → APIM validates Azure AD JWT
   → APIM Phase 1: service token → SOQL lookup (oid → SF username)
@@ -77,6 +97,8 @@ azd up
 | `TEAMS_APP_DEVELOPER_NAME` | For Teams | Developer name in Teams manifest |
 | `TEAMS_APP_PRIVACY_URL` | For Teams | Privacy URL in Teams manifest |
 | `TEAMS_APP_TERMS_URL` | For Teams | Terms of use URL in Teams manifest |
+| `FOUNDRY_PROJECTS` | No | JSON list of Foundry projects `[{name, endpoint}]` — overrides dynamic discovery |
+| `AGENTS_CONFIG` | No | Static JSON agent config — fallback when dynamic discovery unavailable |
 
 ### Key Paths
 
@@ -87,6 +109,7 @@ azd up
 - `infra/modules/apim-jwt-bearer-cert.bicep` — Key Vault → APIM certificate binding
 - `infra/modules/sf-obo-connection.bicep` — Foundry UserEntraToken connection
 - `infra/modules/cognitive.bicep` — AI Services account, project, App Insights connection
+- `infra/modules/subscription-role-assignment.bicep` — Subscription-level RBAC (Reader for Resource Graph discovery)
 - `infra/modules/bot-service.bicep` — Bot Service + Teams/DirectLine channels (conditional on msaAppId)
 - `infra/modules/keyvault.bicep` — Key Vault + APIM RBAC access
 - `infra/policies/sf-mcp-obo-policy.xml` — The OBO exchange policy (3-phase)
@@ -95,13 +118,16 @@ azd up
 **Application:**
 - `src/salesforce-mcp/` — MCP server (7 tools, bearer passthrough)
 - `src/chat-app/` — FastAPI backend + vanilla JS SPA with:
+  - **Multi-agent headless architecture** — works with any AI Foundry agent/project
+  - Dynamic agent discovery via Azure Resource Graph + `AIProjectClient.agents.list()`
+  - Agent selector UI (project → agent cards with business-oriented prompts)
   - MSAL.js auth (redirect fallback, not popup — COOP compat)
   - Tool panel sidebar (waterfall timeline, stats, export)
   - Debug panel (App Insights log tail + instant local logs)
   - Markdown rendering (marked.js, bundled locally)
   - Memory search visibility (Foundry MemorySearchTool results)
   - Teams Bot Framework endpoint (`POST /api/messages`)
-- `src/shared/foundry_helpers.py` — shared agent call helpers (used by web chat + Teams bot)
+- `src/shared/foundry_helpers.py` — shared agent call helpers (multi-agent: accepts `agent_name` + `project_endpoint`)
 
 **Hooks & Scripts:**
 - `hooks/postprovision.py` — Steps 0-8: cert upload, Entra app, Foundry agent, OBO connection, Agent Application, Agent Deployment, Bot Service bootstrap, Teams org catalog

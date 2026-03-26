@@ -30,6 +30,10 @@ let debugPanelOpen = false;
 // Session chips (persisted in sessionStorage)
 let recentSessions = JSON.parse(sessionStorage.getItem('recentSessions') || '[]');
 
+// Agent selector state
+let agentsConfig = [];  // [{project, project_endpoint, agents: [{name, label, icon?}]}]
+let selectedAgent = null;  // {name, label, project_endpoint}
+
 // ---------------------------------------------------------------------------
 // Initialization
 // ---------------------------------------------------------------------------
@@ -149,15 +153,15 @@ async function getAccessToken() {
     }
 }
 
-function onSignedIn() {
+async function onSignedIn() {
     document.getElementById('userInfo').textContent = currentAccount.name || currentAccount.username;
     document.getElementById('authBtn').textContent = 'Sign out';
-    document.getElementById('messageInput').disabled = false;
-    document.getElementById('sendBtn').disabled = false;
-    document.getElementById('suggestions').style.display = 'flex';
     document.getElementById('newChatBtn').style.display = 'inline-block';
     document.getElementById('debugToggleBtn').style.display = 'flex';
     document.getElementById('toolPanelToggleBtn').style.display = 'flex';
+
+    // Fetch available agents and show selector or auto-select
+    await loadAgents();
 }
 
 function onSignedOut() {
@@ -166,13 +170,215 @@ function onSignedOut() {
     document.getElementById('messageInput').disabled = true;
     document.getElementById('sendBtn').disabled = true;
     document.getElementById('welcome').style.display = 'flex';
-    document.getElementById('suggestions').style.display = 'none';
+    const suggestions = document.getElementById('suggestions');
+    if (suggestions) suggestions.style.display = 'none';
     document.getElementById('newChatBtn').style.display = 'none';
     document.getElementById('debugToggleBtn').style.display = 'none';
     document.getElementById('toolPanelToggleBtn').style.display = 'none';
     document.getElementById('smartSuggestions').style.display = 'none';
     lastResponseId = null;
+    selectedAgent = null;
+    agentsConfig = [];
+    updateAgentBadge();
     disconnectDebugSSE();
+}
+
+// ---------------------------------------------------------------------------
+// Agent selection
+// ---------------------------------------------------------------------------
+
+async function loadAgents() {
+    try {
+        const token = await getAccessToken();
+        const resp = await fetch('/api/agents', {
+            headers: { 'Authorization': 'Bearer ' + token },
+        });
+        if (!resp.ok) {
+            // Fallback: no agent selector, enable chat directly
+            selectedAgent = { name: null, label: 'Agent', project_endpoint: null };
+            enableChat();
+            return;
+        }
+        agentsConfig = await resp.json();
+    } catch {
+        selectedAgent = { name: null, label: 'Agent', project_endpoint: null };
+        enableChat();
+        return;
+    }
+
+    // Count total agents across all projects
+    let totalAgents = 0;
+    for (const p of agentsConfig) totalAgents += (p.agents || []).length;
+
+    if (totalAgents <= 1) {
+        // Single agent — auto-select, no UI needed
+        const proj = agentsConfig[0] || {};
+        const agent = (proj.agents || [])[0] || {};
+        selectedAgent = {
+            name: agent.name || null,
+            label: agent.label || agent.name || 'Agent',
+            project_endpoint: proj.project_endpoint || null,
+        };
+        updateAgentBadge();
+        updateWelcomeForAgent();
+        enableChat();
+    } else {
+        // Multiple agents — show selector
+        renderAgentSelector();
+    }
+}
+
+function renderAgentSelector() {
+    const welcome = document.getElementById('welcome');
+    if (!welcome) return;
+
+    // Hide default suggestions until agent is selected
+    const suggestions = document.getElementById('suggestions');
+    if (suggestions) suggestions.style.display = 'none';
+
+    // Remove existing selector if any
+    const existing = document.getElementById('agentSelector');
+    if (existing) existing.remove();
+
+    const selector = document.createElement('div');
+    selector.id = 'agentSelector';
+    selector.className = 'agent-selector';
+
+    let html = '<h2>Choose an Agent</h2><p>Select which assistant you want to chat with.</p>';
+    html += '<div class="agent-cards">';
+
+    for (const proj of agentsConfig) {
+        const showProjectLabel = agentsConfig.length > 1;
+        if (showProjectLabel) {
+            html += '<div class="agent-project-label">' + escapeHtml(proj.project || 'Default') + '</div>';
+        }
+        for (const agent of (proj.agents || [])) {
+            const meta = getAgentMeta(agent.name);
+            const icon = agent.icon || meta.icon || 'bot';
+            html += '<button class="agent-card" onclick="selectAgent(\'' +
+                escapeAttr(agent.name) + '\', \'' +
+                escapeAttr(agent.label || agent.name) + '\', \'' +
+                escapeAttr(proj.project_endpoint || '') + '\')">' +
+                '<div class="agent-card-icon">' + getAgentIcon(icon) + '</div>' +
+                '<div class="agent-card-name">' + escapeHtml(agent.label || agent.name) + '</div>' +
+            '</button>';
+        }
+    }
+    html += '</div>';
+
+    selector.innerHTML = html;
+
+    // Replace welcome content with selector
+    welcome.innerHTML = '';
+    welcome.appendChild(selector);
+}
+
+// Agent metadata — enriches dynamic discovery with icons, descriptions, suggestions
+const AGENT_METADATA = {
+    'salesforce-assistant': {
+        icon: 'cloud',
+        description: 'Interrogez vos donnees CRM Salesforce en temps reel avec votre identite.',
+        prompts: [
+            'Affiche mes opportunites ouvertes avec leur montant',
+            'Liste mes comptes avec le chiffre d\'affaires annuel',
+            'Quels contacts ai-je dans le secteur bancaire ?',
+            'Montre mes cases ouvertes par priorite',
+        ],
+    },
+    'sf-assistant': {
+        icon: 'cloud',
+        description: 'Assistant Salesforce (version alternative).',
+        prompts: [
+            'Affiche mes opportunites ouvertes',
+            'Liste mes comptes',
+            'Cherche un contact',
+            'Quels objets puis-je consulter ?',
+        ],
+    },
+    'servicenow-assistant': {
+        icon: 'snow',
+        description: 'Gerez vos incidents, demandes et changements ServiceNow.',
+        prompts: [
+            'Quels sont mes incidents ouverts ?',
+            'Affiche les demandes de changement en attente d\'approbation',
+            'Cree un incident de priorite haute pour un probleme reseau',
+            'Quel est le statut de mes demandes de service ?',
+        ],
+    },
+};
+
+function getAgentMeta(agentName) {
+    return AGENT_METADATA[agentName] || {
+        icon: 'bot',
+        description: 'Posez vos questions a l\'agent.',
+        prompts: ['Que peux-tu faire ?', 'Qui suis-je ?'],
+    };
+}
+
+function getAgentSuggestions(agentName) {
+    return getAgentMeta(agentName);
+}
+
+function selectAgent(name, label, projectEndpoint) {
+    selectedAgent = {
+        name: name,
+        label: label,
+        project_endpoint: projectEndpoint || null,
+    };
+
+    const info = getAgentSuggestions(name);
+
+    // Restore welcome screen with agent-specific content
+    const welcome = document.getElementById('welcome');
+    if (welcome) {
+        let chipsHtml = '';
+        for (const prompt of info.prompts) {
+            chipsHtml += '<button class="suggestion-chip" onclick="useSuggestion(this.textContent)">' + escapeHtml(prompt) + '</button>';
+        }
+        welcome.innerHTML =
+            '<h2>' + escapeHtml(label) + '</h2>' +
+            '<p>' + escapeHtml(info.description) + '</p>' +
+            '<div class="suggestions" id="suggestions" style="display: flex;">' + chipsHtml + '</div>';
+    }
+
+    updateAgentBadge();
+    enableChat();
+
+    // Reset conversation for new agent
+    lastResponseId = null;
+
+    if (appInsights) appInsights.trackEvent({ name: 'AgentSelected', properties: { agent: name } });
+}
+
+function enableChat() {
+    document.getElementById('messageInput').disabled = false;
+    document.getElementById('sendBtn').disabled = false;
+}
+
+function updateAgentBadge() {
+    const badge = document.getElementById('agentBadge');
+    if (badge && selectedAgent) {
+        badge.textContent = selectedAgent.label;
+        badge.style.display = 'inline-block';
+    }
+}
+
+function updateWelcomeForAgent() {
+    const welcomeTitle = document.querySelector('#welcome h2');
+    if (welcomeTitle && selectedAgent && selectedAgent.label) {
+        welcomeTitle.textContent = selectedAgent.label;
+    }
+}
+
+function getAgentIcon(icon) {
+    const icons = {
+        'cloud': '&#9729;',
+        'snow': '&#10052;',
+        'bot': '&#9881;',
+        'star': '&#9733;',
+        'data': '&#128202;',
+    };
+    return icons[icon] || icons['bot'];
 }
 
 // ---------------------------------------------------------------------------
@@ -207,16 +413,32 @@ function startNewChat() {
     const welcome = document.createElement('div');
     welcome.className = 'welcome';
     welcome.id = 'welcome';
-    welcome.innerHTML =
-        '<h2>Salesforce Agent</h2>' +
-        '<p>Sign in with your Microsoft account and ask the agent about your Salesforce data. Your identity propagates end-to-end through the AI agent to Salesforce.</p>' +
-        '<div class="suggestions" id="suggestions" style="display: flex;">' +
-            '<button class="suggestion-chip" onclick="useSuggestion(this.textContent)">List my Salesforce accounts</button>' +
-            '<button class="suggestion-chip" onclick="useSuggestion(this.textContent)">Show my open opportunities</button>' +
-            '<button class="suggestion-chip" onclick="useSuggestion(this.textContent)">Search for a contact by name</button>' +
-            '<button class="suggestion-chip" onclick="useSuggestion(this.textContent)">What objects can I access?</button>' +
-        '</div>';
-    container.appendChild(welcome);
+
+    // Count total agents
+    let totalAgents = 0;
+    for (const p of agentsConfig) totalAgents += (p.agents || []).length;
+
+    if (totalAgents > 1) {
+        // Multi-agent: show agent selector again
+        container.appendChild(welcome);
+        selectedAgent = null;
+        document.getElementById('messageInput').disabled = true;
+        document.getElementById('sendBtn').disabled = true;
+        renderAgentSelector();
+        updateAgentBadge();
+    } else {
+        const label = selectedAgent ? selectedAgent.label : 'Agent';
+        const info = selectedAgent ? getAgentSuggestions(selectedAgent.name) : { description: '', prompts: [] };
+        let chipsHtml = '';
+        for (const prompt of info.prompts) {
+            chipsHtml += '<button class="suggestion-chip" onclick="useSuggestion(this.textContent)">' + escapeHtml(prompt) + '</button>';
+        }
+        welcome.innerHTML =
+            '<h2>' + escapeHtml(label) + '</h2>' +
+            '<p>' + escapeHtml(info.description) + '</p>' +
+            '<div class="suggestions" id="suggestions" style="display: flex;">' + chipsHtml + '</div>';
+        container.appendChild(welcome);
+    }
 
     // Clear panels
     document.getElementById('smartSuggestions').style.display = 'none';
@@ -272,15 +494,19 @@ async function sendMessage() {
     try {
         const token = await getAccessToken();
         debugLog('CHAT', 'Token acquired, calling agent...');
+        const chatBody = {
+            message: message,
+            access_token: token,
+            previous_response_id: lastResponseId,
+            session_id: sessionId,
+        };
+        if (selectedAgent && selectedAgent.name) chatBody.agent_name = selectedAgent.name;
+        if (selectedAgent && selectedAgent.project_endpoint) chatBody.project_endpoint = selectedAgent.project_endpoint;
+
         const resp = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: message,
-                access_token: token,
-                previous_response_id: lastResponseId,
-                session_id: sessionId,
-            }),
+            body: JSON.stringify(chatBody),
         });
 
         if (!resp.ok) {
@@ -395,21 +621,40 @@ function showSmartSuggestions(toolCalls) {
 
 function getSuggestionsForTool(tc) {
     if (!tc || !tc.name) return [];
+    const agentName = selectedAgent ? selectedAgent.name : '';
+
+    // ServiceNow-specific tool suggestions
+    if (agentName === 'servicenow-assistant') {
+        switch (tc.name) {
+            case 'query_records':
+                return ['Montre plus de details', 'Filtre par priorite haute', 'Exporte ces resultats'];
+            case 'create_record':
+                return ['Verifie la creation', 'Affiche le ticket cree'];
+            case 'update_record':
+                return ['Confirme la mise a jour', 'Affiche le ticket modifie'];
+            case 'whoami':
+                return ['Mes incidents ouverts', 'Mes demandes en cours', 'Mes approbations en attente'];
+            default:
+                return [];
+        }
+    }
+
+    // Salesforce-specific tool suggestions (default)
     switch (tc.name) {
         case 'soql_query':
-            return ['Show more details', 'Export these results', 'Update a record from these results'];
+            return ['Montre plus de details', 'Exporte ces resultats', 'Mets a jour un enregistrement'];
         case 'write_record':
-            return ['Verify the change', 'Show the updated record'];
+            return ['Verifie la modification', 'Affiche l\'enregistrement mis a jour'];
         case 'whoami':
-            return ['Show my open opportunities', 'Show my recent cases', 'List my accounts'];
+            return ['Mes opportunites ouvertes', 'Mes cases recentes', 'Liste mes comptes'];
         case 'list_objects':
-            return ['Describe Account', 'Describe Opportunity', 'Describe Contact'];
+            return ['Decris Account', 'Decris Opportunity', 'Decris Contact'];
         case 'describe_object':
-            return ['Query this object', 'Show required fields', 'Create a new record'];
+            return ['Interroge cet objet', 'Montre les champs obligatoires', 'Cree un nouvel enregistrement'];
         case 'search_records':
-            return ['Show full details', 'Update a record', 'Search for something else'];
+            return ['Montre les details complets', 'Mets a jour un enregistrement', 'Cherche autre chose'];
         case 'process_approval':
-            return ['Show pending approvals', 'Check approval status'];
+            return ['Montre les approbations en attente', 'Verifie le statut'];
         default:
             return [];
     }
@@ -1119,12 +1364,13 @@ async function submitApproval(approvalIds, approve) {
         const resp = await fetch('/api/chat/approve', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            body: JSON.stringify(Object.assign({
                 access_token: token,
                 previous_response_id: lastResponseId,
                 approval_ids: approvalIds,
                 approve: approve,
-            }),
+            }, selectedAgent && selectedAgent.name ? { agent_name: selectedAgent.name } : {},
+               selectedAgent && selectedAgent.project_endpoint ? { project_endpoint: selectedAgent.project_endpoint } : {})),
         });
 
         if (!resp.ok) {

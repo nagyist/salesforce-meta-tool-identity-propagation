@@ -1102,3 +1102,81 @@ body.debug-open .app-body {
   .header h1 { font-size: 14px; }
   .tool-panel { width: 100%; }
 }
+
+/* ---------------------------------------------------------------------------
+   Agent selector & badge
+   --------------------------------------------------------------------------- */
+
+.agent-badge {
+  background: #2563eb;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.agent-selector {
+  text-align: center;
+  padding: 20px;
+}
+.agent-selector h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  color: #e0e0e0;
+}
+.agent-selector p {
+  margin: 0 0 24px;
+  color: #999;
+  font-size: 14px;
+}
+
+.agent-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+}
+
+.agent-project-label {
+  width: 100%;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 8px;
+}
+
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 32px;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-width: 140px;
+}
+.agent-card:hover {
+  border-color: #2563eb;
+  background: #1a1a2e;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+.agent-card-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.agent-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e0e0;
+}

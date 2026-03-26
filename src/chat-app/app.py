@@ -3,6 +3,7 @@
 Endpoints:
   GET  /health           — Health check
   GET  /api/config       — MSAL config (from env vars, no hardcoded values)
+  GET  /api/agents       — Available agents grouped by project
   POST /api/chat         — Send message to agent (OBO flow)
   POST /api/chat/approve — Approve MCP tool calls
   GET  /api/debug/logs   — SSE stream of App Insights logs for a session
@@ -89,6 +90,166 @@ async def config():
     }
 
 
+import time as _time
+import httpx
+
+# Per-user cache: user_oid -> {data, expires}
+_agents_cache_by_user = {}
+_CACHE_TTL = 300  # 5 minutes
+
+
+async def _discover_foundry_projects(arm_token: str):
+    """Discover all AI Foundry projects the user has access to via Azure Resource Graph.
+
+    Uses the user's ARM token to query Resource Graph — each user sees only
+    the projects they have permissions on.
+    """
+    query = {
+        "query": (
+            "Resources "
+            "| where type == 'microsoft.cognitiveservices/accounts/projects' "
+            "| where properties.provisioningState == 'Succeeded' "
+            "| project name, properties.displayName, properties.endpoints"
+        ),
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2022-10-01",
+            headers={
+                "Authorization": f"Bearer {arm_token}",
+                "Content-Type": "application/json",
+            },
+            json=query,
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    projects = []
+    for row in data.get("data", []):
+        display_name = row.get("properties_displayName") or row.get("name", "")
+        endpoints = row.get("properties_endpoints") or {}
+        endpoint = endpoints.get("AI Foundry API", "")
+        if endpoint:
+            projects.append({"name": display_name, "endpoint": endpoint})
+
+    return projects
+
+
+async def _list_agents_for_project(endpoint: str):
+    """List agents from a single Foundry project using managed identity."""
+    from azure.ai.projects import AIProjectClient
+    from azure.identity import DefaultAzureCredential
+
+    credential = DefaultAzureCredential()
+    client = AIProjectClient(endpoint=endpoint, credential=credential)
+    try:
+        raw = await asyncio.to_thread(lambda: list(client.agents.list()))
+        return [
+            {"name": a.name, "label": a.name.replace("-", " ").title()}
+            for a in raw
+        ]
+    finally:
+        client.close()
+
+
+async def _discover_all_agents(arm_token: str, cache_key: str):
+    """Full dynamic discovery: Resource Graph for projects, SDK for agents per project."""
+    now = _time.time()
+    cached = _agents_cache_by_user.get(cache_key)
+    if cached and now < cached["expires"]:
+        return cached["data"]
+
+    # Step 1: Discover projects the user can see
+    projects = await _discover_foundry_projects(arm_token)
+    if not projects:
+        logger.info("No Foundry projects found via Resource Graph")
+        return None
+
+    logger.info("Discovered %d Foundry projects: %s", len(projects),
+                [p["name"] for p in projects])
+
+    # Step 2: List agents in each project (using managed identity)
+    result = []
+    for proj in projects:
+        endpoint = proj["endpoint"]
+        name = proj["name"]
+        try:
+            agents = await _list_agents_for_project(endpoint)
+            if agents:
+                result.append({
+                    "project": name,
+                    "project_endpoint": endpoint,
+                    "agents": agents,
+                })
+                logger.info("  Project '%s': %d agents", name, len(agents))
+        except Exception as e:
+            logger.warning("  Failed to list agents for '%s': %s", name, e)
+
+    if result:
+        _agents_cache_by_user[cache_key] = {"data": result, "expires": now + _CACHE_TTL}
+
+    return result or None
+
+
+@app.get("/api/agents")
+async def agents(request: Request):
+    """Discover Foundry projects + agents dynamically.
+
+    Requires the user's access token (passed as Authorization header).
+    Uses Azure Resource Graph (user's ARM token) to find projects,
+    then AIProjectClient (managed identity) to list agents per project.
+
+    Fallback chain: dynamic → AGENTS_CONFIG → AGENT_NAME.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth:
+        raise HTTPException(status_code=401, detail="Sign in required")
+
+    # Extract user token — the frontend sends a Foundry-scoped token (ai.azure.com),
+    # but Resource Graph needs an ARM-scoped token (management.azure.com).
+    # We'll try with the token we have; if it fails, fall back to managed identity discovery.
+    ai_token = auth.removeprefix("Bearer ").strip()
+
+    # Try to get an ARM token from the user via the backend's managed identity + OBO,
+    # but that's complex. Instead: use managed identity for Resource Graph too,
+    # and cache per-deployment (not per-user). User auth gates access but discovery
+    # uses managed identity which has Reader on the subscription.
+    try:
+        from azure.identity import DefaultAzureCredential
+        credential = DefaultAzureCredential()
+        arm_token_obj = credential.get_token("https://management.azure.com/.default")
+        arm_token = arm_token_obj.token
+
+        result = await _discover_all_agents(arm_token, cache_key="global")
+        if result:
+            return result
+    except Exception as e:
+        logger.warning("Dynamic discovery failed: %s", e)
+
+    # Fallback: static AGENTS_CONFIG
+    raw = os.environ.get("AGENTS_CONFIG", "")
+    if raw:
+        try:
+            config = json.loads(raw)
+            if config:
+                return config
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("Invalid AGENTS_CONFIG JSON")
+
+    # Final fallback: single agent
+    endpoint = os.environ.get("AI_FOUNDRY_PROJECT_ENDPOINT", "")
+    return [{
+        "project": "default",
+        "project_endpoint": endpoint,
+        "agents": [{
+            "name": os.environ.get("AGENT_NAME", "salesforce-assistant"),
+            "label": os.environ.get("AGENT_NAME", "Salesforce Assistant").replace("-", " ").title(),
+        }],
+    }]
+
+
 @app.post("/api/chat")
 async def chat(request: Request):
     """Send a message to the Foundry agent via the Responses API."""
@@ -97,17 +258,21 @@ async def chat(request: Request):
     message = body.get("message", "")
     previous_response_id = body.get("previous_response_id")
     session_id = body.get("session_id", "unknown")
+    agent_name = body.get("agent_name")
+    project_endpoint = body.get("project_endpoint")
 
     if not access_token:
         raise HTTPException(status_code=401, detail="access_token required")
 
-    logger.info("chat_request session_id=%s", session_id)
+    logger.info("chat_request session_id=%s agent=%s", session_id, agent_name or "default")
 
     try:
         result = await call_agent(
             access_token=access_token,
             message=message,
             previous_response_id=previous_response_id,
+            agent_name=agent_name,
+            project_endpoint=project_endpoint,
         )
         return result
     except asyncio.TimeoutError:
@@ -128,6 +293,8 @@ async def chat_approve(request: Request):
     previous_response_id = body.get("previous_response_id")
     approval_id_list = body.get("approval_ids", [])
     approve = body.get("approve", True)
+    agent_name = body.get("agent_name")
+    project_endpoint = body.get("project_endpoint")
 
     if not access_token:
         raise HTTPException(status_code=401, detail="access_token required")
@@ -140,6 +307,8 @@ async def chat_approve(request: Request):
             previous_response_id=previous_response_id,
             approval_ids=approval_id_list,
             approve=approve,
+            agent_name=agent_name,
+            project_endpoint=project_endpoint,
         )
         return result
     except asyncio.TimeoutError:

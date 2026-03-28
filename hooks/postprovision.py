@@ -580,7 +580,7 @@ def create_agent():
     from azure.identity import DefaultAzureCredential
     from azure.ai.projects import AIProjectClient
     from azure.ai.projects.models import (
-        PromptAgentDefinition, MCPTool, MemorySearchTool,
+        PromptAgentDefinition, MCPTool, MemorySearchTool, MemorySearchOptions,
     )
 
     credential = DefaultAzureCredential()
@@ -621,7 +621,8 @@ def create_agent():
         memory_tool = MemorySearchTool(
             memory_store_name=store_name,
             scope="{{$userId}}",
-            update_delay=30,
+            update_delay=300,
+            search_options=MemorySearchOptions(max_memories=1),
         )
         tools.append(memory_tool)
         print(f"  MemorySearchTool added (store={store_name}, scope=per-user)")
@@ -631,16 +632,17 @@ You are an assistant with access to Salesforce via MCP tools.
 
 ## Memory
 You have access to a memory store that remembers details from past conversations with each user.
-- Before calling describe_object for read queries, check memory — you may already know the \
-user's common objects, field names, filters, and query patterns.
+- Memory is automatically populated from conversations. No explicit save is needed.
+- Use memory when you lack information that a past conversation might have provided \
+(e.g., user's UserId, preferred objects, common query patterns).
+- Do NOT call memory_search if the answer is already in the current conversation history.
 - ALWAYS call describe_object(mode="full") before writes regardless of memory — picklist \
 values and validation rules can change at any time.
-- Memory is automatically populated from conversations. No explicit save is needed.
 
 ## Workflow
 1. Plan — tell the user what you intend to do before calling tools.
-2. whoami — if the user says "my" or refers to themselves, check memory first \
-for their UserId/OwnerId. Only call whoami if it is not in memory. \
+2. whoami — if the user says "my" or refers to themselves, use their UserId if it is \
+already in the conversation or memory. Only call whoami if you have neither. \
 Use UserId as OwnerId or CreatedById in SOQL WHERE clauses.
 3. list_objects — find the API name (use `name`, not `label`).
 4. describe_object — REQUIRED before create/update/upsert/delete (use mode="full").

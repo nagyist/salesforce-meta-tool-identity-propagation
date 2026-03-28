@@ -580,7 +580,7 @@ def create_agent():
     from azure.identity import DefaultAzureCredential
     from azure.ai.projects import AIProjectClient
     from azure.ai.projects.models import (
-        PromptAgentDefinition, MCPTool, MemorySearchTool, MemorySearchOptions,
+        PromptAgentDefinition, MCPTool, MemorySearchTool,
     )
 
     credential = DefaultAzureCredential()
@@ -622,7 +622,6 @@ def create_agent():
             memory_store_name=store_name,
             scope="{{$userId}}",
             update_delay=300,
-            search_options=MemorySearchOptions(max_memories=1),
         )
         tools.append(memory_tool)
         print(f"  MemorySearchTool added (store={store_name}, scope=per-user)")

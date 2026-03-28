@@ -142,13 +142,29 @@ def init_sfdx_project(work_dir: str):
 
 def deploy_metadata(org: str, work_dir: str) -> bool:
     """Deploy metadata from a temp sfdx project directory."""
-    result = run(
-        f"sf project deploy start -o {org} --source-dir force-app",
+    proc = subprocess.run(
+        f"sf project deploy start -o {org} --source-dir force-app --json",
+        capture_output=True, text=True, shell=True,
+        encoding="utf-8", errors="replace",
+        env={**os.environ, "MSYS_NO_PATHCONV": "1"},
         cwd=work_dir,
     )
-    if result is None:
-        print("  ERROR: Metadata deployment failed")
+    try:
+        data = json.loads(proc.stdout) if proc.stdout.strip() else {}
+    except json.JSONDecodeError:
+        data = {}
+
+    files = data.get("result", {}).get("files", [])
+    failures = [f for f in files if f.get("state") == "Failed"]
+    if failures:
+        for f in failures:
+            print(f"  ERROR: {f.get('fullName')}: {f.get('error')}")
         return False
+
+    if proc.returncode != 0:
+        print(f"  ERROR: Metadata deployment failed")
+        return False
+
     print("  Deployed successfully")
     return True
 
@@ -234,16 +250,28 @@ def write_temp_json(data) -> str:
     return f.name
 
 
+def graph_request(method: str, url_path: str, body: dict | None = None):
+    """Make a Microsoft Graph API request (GET, POST, PATCH, DELETE).
+
+    url_path is relative to https://graph.microsoft.com/v1.0, e.g.
+    "/applications/{id}" or "/servicePrincipals/{id}/addTokenSigningCertificate".
+    """
+    cmd = (
+        f'az rest --method {method} '
+        f'--url "https://graph.microsoft.com/v1.0{url_path}" '
+        f'--headers "Content-Type=application/json"'
+    )
+    body_file = None
+    if body is not None:
+        body_file = write_temp_json(body)
+        cmd += f' --body "@{body_file}"'
+    try:
+        return run(cmd, parse_json=True)
+    finally:
+        if body_file:
+            os.unlink(body_file)
+
+
 def graph_patch(object_id: str, body: dict):
     """PATCH a Microsoft Graph application resource."""
-    body_file = write_temp_json(body)
-    try:
-        return run(
-            f'az rest --method PATCH '
-            f'--url "https://graph.microsoft.com/v1.0/applications/{object_id}" '
-            f'--headers "Content-Type=application/json" '
-            f'--body "@{body_file}"',
-            parse_json=True,
-        )
-    finally:
-        os.unlink(body_file)
+    return graph_request("PATCH", f"/applications/{object_id}", body)

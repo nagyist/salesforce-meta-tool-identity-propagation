@@ -4,7 +4,7 @@ Single entry point for all SF setup phases after creating a Dev Trial
 and authenticating with `sf org login web`:
 
   Step 1/5: Connected App (JWT Bearer)      -- X.509 cert, OAuth scopes, profile pre-auth
-  Step 2/5: SSO Federation (Entra OIDC)     -- Entra App + Auth Provider + Apex handler
+  Step 2/5: SSO Federation (Entra SAML)     -- Entra Enterprise App + SAML SSO config
   Step 3/5: Demo User + Test Data           -- Custom profile (no Account delete) + user + data
   Step 4/5: OBO Service Account             -- Dedicated user for JWT Bearer flow
   Step 5/5: Federation IDs                  -- Azure AD oid -> SF FederationIdentifier
@@ -36,7 +36,7 @@ from sf_utils import (
     soql_query, tooling_query, query_profile_id, query_user,
     init_sfdx_project, deploy_metadata,
     sf_rest_post, create_setup_entity_access, assign_perm_set_to_user,
-    write_temp_json, graph_patch,
+    write_temp_json, graph_patch, graph_request,
 )
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -66,7 +66,7 @@ SVC_ALIAS = "mcpobosv"
 # Steps
 STEPS = [
     ("eca",     "Connected App (JWT Bearer)"),
-    ("sso",     "SSO Federation (Entra OIDC)"),
+    ("sso",     "SSO Federation (Entra SAML)"),
     ("demo",    "Demo User + Test Data"),
     ("svcacct", "OBO Service Account"),
     ("fedid",   "Federation IDs"),
@@ -294,7 +294,7 @@ def step_eca(org: str, email: str, cert_path: str,
 
 
 # ===================================================================
-#  Step 2: SSO Federation (Entra OIDC) — was setup-salesforce-sso.py
+#  Step 2: SSO Federation (Entra SAML) — SAML 2.0, no Apex required
 # ===================================================================
 
 def _sso_check_prerequisites():
@@ -317,67 +317,6 @@ def _sso_check_prerequisites():
 
     print(f"  sf CLI: {sf_version.splitlines()[0]}")
     return tenant_id, True
-
-
-def _sso_create_entra_app(tenant_id: str):
-    """Create Entra App Registration for Salesforce SSO (idempotent)."""
-    env_name = os.environ.get("AZURE_ENV_NAME", "")
-    display_name = f"Salesforce SSO ({env_name})" if env_name else "Salesforce SSO"
-
-    app_id = run(
-        f"az ad app list --filter \"displayName eq '{display_name}'\" "
-        "--query \"[0].appId\" -o tsv"
-    )
-    if app_id:
-        print(f"  Already exists: {app_id}")
-    else:
-        app_id = run(
-            f'az ad app create --display-name "{display_name}" '
-            "--sign-in-audience AzureADMyOrg --query appId -o tsv"
-        )
-        if not app_id:
-            print("  ERROR: Failed to create app registration")
-            return None, None, None
-        print(f"  Created: {app_id}")
-
-    obj_id = run(f'az ad app show --id "{app_id}" --query id -o tsv')
-
-    # Set identifier URI
-    uri = f"api://{app_id}"
-    run(f'az ad app update --id "{app_id}" --identifier-uris "{uri}"')
-    print(f"  Identifier URI: {uri}")
-
-    # Configure optional ID token claims
-    graph_patch(obj_id, {
-        "optionalClaims": {
-            "idToken": [
-                {"name": "email", "essential": False},
-                {"name": "given_name", "essential": False},
-                {"name": "family_name", "essential": False},
-                {"name": "preferred_username", "essential": False},
-            ]
-        }
-    })
-    print("  Optional claims: email, given_name, family_name, preferred_username")
-
-    # Create client secret
-    secret = run(
-        f'az ad app credential reset --id "{app_id}" --query password -o tsv'
-    )
-    if not secret:
-        print("  ERROR: Failed to create client secret")
-        return None, None, None
-    print(f"  Client secret: created (length: {len(secret)})")
-
-    # Create service principal (idempotent)
-    sp_id = run(f'az ad sp show --id "{app_id}" --query id -o tsv')
-    if not sp_id:
-        sp_id = run(f'az ad sp create --id "{app_id}" --query id -o tsv')
-        print(f"  Service principal: created ({sp_id})")
-    else:
-        print(f"  Service principal: exists ({sp_id})")
-
-    return app_id, obj_id, secret
 
 
 def _sso_authenticate_salesforce(org: str, has_sf_cli: bool):
@@ -427,89 +366,487 @@ def _sso_authenticate_salesforce(org: str, has_sf_cli: bool):
     return instance_url, admin_username
 
 
-def _sso_update_redirect_uri(obj_id: str, instance_url: str):
-    """Update Entra App with Salesforce callback URL + ID token issuance."""
-    redirect_uri = f"{instance_url}/services/authcallback/AzureAD"
+def _sso_create_saml_enterprise_app(tenant_id: str, instance_url: str):
+    """Create Entra Enterprise App configured for SAML SSO (idempotent).
+
+    Returns (app_id, sp_object_id, cert_base64) or (None, None, None).
+    """
+    env_name = os.environ.get("AZURE_ENV_NAME", "")
+    display_name = f"Salesforce SSO ({env_name})" if env_name else "Salesforce SSO"
+
+    # --- App Registration (idempotent) ---
+    app_id = run(
+        f"az ad app list --filter \"displayName eq '{display_name}'\" "
+        "--query \"[0].appId\" -o tsv"
+    )
+    if app_id:
+        print(f"  App Registration: exists ({app_id})")
+    else:
+        app_id = run(
+            f'az ad app create --display-name "{display_name}" '
+            "--sign-in-audience AzureADMyOrg --query appId -o tsv"
+        )
+        if not app_id:
+            print("  ERROR: Failed to create app registration")
+            return None, None, None
+        print(f"  App Registration: created ({app_id})")
+
+    obj_id = run(f'az ad app show --id "{app_id}" --query id -o tsv')
+
+    # --- Identifier URI = SF org URL (SAML Entity ID / Audience) ---
+    # Use Graph API directly — az CLI blocks non-verified domains in
+    # managed tenants, but Graph API allows it for SAML apps.
+    identifier_uri = instance_url
+    graph_patch(obj_id, {"identifierUris": [identifier_uri]})
+    print(f"  Identifier URI (Entity ID): {identifier_uri}")
+
+    # --- Reply URLs = SF SAML ACS endpoints ---
+    # SF sends the bare org URL as ACS in the SAML AuthnRequest
+    reply_urls = [
+        instance_url,
+        f"{instance_url}/services/auth/sso/Azure_AD_SAML",
+    ]
     graph_patch(obj_id, {
         "web": {
-            "redirectUris": [redirect_uri],
-            "implicitGrantSettings": {
-                "enableIdTokenIssuance": True,
-            },
+            "redirectUris": reply_urls,
         },
     })
-    print(f"  Redirect URI: {redirect_uri}")
-    print("  ID token issuance: enabled")
+    print(f"  Reply URLs (ACS): {reply_urls[0]} + .../Azure_AD_SAML")
+
+    # --- Accept mapped claims (needed for custom NameID) ---
+    graph_patch(obj_id, {
+        "api": {"acceptMappedClaims": True},
+    })
+    print("  acceptMappedClaims: enabled")
+
+    # --- Service Principal (idempotent) ---
+    sp_obj_id = run(f'az ad sp show --id "{app_id}" --query id -o tsv')
+    if not sp_obj_id:
+        sp_obj_id = run(f'az ad sp create --id "{app_id}" --query id -o tsv')
+        print(f"  Service Principal: created ({sp_obj_id})")
+    else:
+        print(f"  Service Principal: exists ({sp_obj_id})")
+
+    # --- Set SAML SSO mode ---
+    graph_request("PATCH", f"/servicePrincipals/{sp_obj_id}", {
+        "preferredSingleSignOnMode": "saml",
+    })
+    print("  SSO mode: SAML")
+
+    # --- Token-signing certificate ---
+    cert_base64 = None
+    # Check if a signing cert already exists
+    sp_data = graph_request("GET", f"/servicePrincipals/{sp_obj_id}"
+                            "?$select=keyCredentials")
+    has_signing_cert = False
+    if sp_data and sp_data.get("keyCredentials"):
+        for kc in sp_data["keyCredentials"]:
+            if kc.get("usage") == "Sign" and kc.get("type") == "X509CertAndPassword":
+                has_signing_cert = True
+                cert_base64 = kc.get("key", "")
+                break
+
+    if not has_signing_cert:
+        cert_resp = graph_request(
+            "POST",
+            f"/servicePrincipals/{sp_obj_id}/addTokenSigningCertificate",
+            {
+                "displayName": "CN=Salesforce SAML Signing",
+                "endDateTime": "2028-01-01T00:00:00Z",
+            },
+        )
+        if cert_resp and cert_resp.get("key"):
+            cert_base64 = cert_resp["key"]
+            thumbprint = cert_resp.get("thumbprint", "")
+            print(f"  Signing certificate: created (thumbprint: {thumbprint})")
+            # Set as preferred signing key (required for SAML assertion signing)
+            if thumbprint:
+                graph_request("PATCH", f"/servicePrincipals/{sp_obj_id}", {
+                    "preferredTokenSigningKeyThumbprint": thumbprint,
+                })
+                print(f"  Preferred signing key: set")
+        else:
+            print("  WARNING: Failed to create signing certificate")
+            print("  You may need to add it manually in the Entra portal")
+    else:
+        print("  Signing certificate: exists")
+        # Ensure preferred signing key is set
+        sp_pref = graph_request(
+            "GET",
+            f"/servicePrincipals/{sp_obj_id}"
+            "?$select=preferredTokenSigningKeyThumbprint",
+        )
+        if sp_pref and not sp_pref.get("preferredTokenSigningKeyThumbprint"):
+            import base64, hashlib
+            for kc in sp_data["keyCredentials"]:
+                if kc.get("usage") == "Sign":
+                    cki = kc.get("customKeyIdentifier", "")
+                    thumb_hex = base64.b64decode(cki).hex().upper()
+                    graph_request("PATCH", f"/servicePrincipals/{sp_obj_id}", {
+                        "preferredTokenSigningKeyThumbprint": thumb_hex,
+                    })
+                    print(f"  Preferred signing key: set ({thumb_hex[:16]}...)")
+                    break
+
+    # If we couldn't get the cert from keyCredentials (key field is often empty
+    # on GET), try downloading from the SP's federation metadata
+    if not cert_base64:
+        cert_base64 = _sso_download_saml_cert(tenant_id, app_id, sp_obj_id)
+
+    # --- Claims mapping policy (NameID = user.objectid) ---
+    _sso_configure_claims_policy(sp_obj_id)
+
+    return app_id, sp_obj_id, cert_base64
 
 
-def _sso_generate_and_deploy(org: str, tenant_id: str, app_id: str,
-                              secret: str, instance_url: str,
-                              admin_username: str, has_sf_cli: bool) -> bool:
-    """Generate Auth Provider metadata and deploy to Salesforce."""
-    auth_provider_xml = textwrap.dedent(f"""\
+def _sso_download_saml_cert(tenant_id: str, app_id: str,
+                            sp_obj_id: str | None = None) -> str | None:
+    """Download the SAML signing certificate from Entra federation metadata.
+
+    If sp_obj_id is provided, matches the cert to the preferred signing key.
+    """
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    import base64
+    import hashlib
+
+    metadata_url = (
+        f"https://login.microsoftonline.com/{tenant_id}/"
+        f"federationmetadata/2007-06/federationmetadata.xml"
+        f"?appid={app_id}"
+    )
+    print(f"  Downloading SAML metadata...")
+    try:
+        with urllib.request.urlopen(metadata_url, timeout=15) as resp:
+            xml_bytes = resp.read()
+    except Exception as e:
+        print(f"  WARNING: Could not download federation metadata: {e}")
+        return None
+
+    # Get preferred thumbprint if available
+    preferred_thumb = None
+    if sp_obj_id:
+        sp_pref = graph_request(
+            "GET",
+            f"/servicePrincipals/{sp_obj_id}"
+            "?$select=preferredTokenSigningKeyThumbprint",
+        )
+        if sp_pref:
+            preferred_thumb = sp_pref.get(
+                "preferredTokenSigningKeyThumbprint", ""
+            )
+
+    try:
+        root = ET.fromstring(xml_bytes)
+        ns = {
+            "md": "urn:oasis:names:tc:SAML:2.0:metadata",
+            "ds": "http://www.w3.org/2000/09/xmldsig#",
+        }
+        certs = []
+        for kd in root.findall(".//md:KeyDescriptor[@use='signing']", ns):
+            cert_el = kd.find(".//ds:X509Certificate", ns)
+            if cert_el is not None and cert_el.text:
+                certs.append(cert_el.text.strip())
+
+        # Match preferred thumbprint if we have one
+        if preferred_thumb and certs:
+            for c in certs:
+                der = base64.b64decode(c)
+                thumb = hashlib.sha1(der).hexdigest().upper()
+                if thumb == preferred_thumb.upper():
+                    print(f"  Certificate matched preferred key "
+                          f"(thumbprint: {thumb[:16]}...)")
+                    return c
+
+        # Fallback to first cert
+        if certs:
+            print(f"  Certificate extracted from metadata "
+                  f"(length: {len(certs[0])})")
+            return certs[0]
+    except Exception as e:
+        print(f"  WARNING: Could not parse federation metadata: {e}")
+
+    return None
+
+
+def _sso_configure_claims_policy(sp_obj_id: str):
+    """Create and assign a ClaimsMappingPolicy so NameID = user.objectid."""
+    policy_name = "Salesforce SAML NameID = oid"
+
+    # Check existing policies on this SP
+    existing = graph_request(
+        "GET", f"/servicePrincipals/{sp_obj_id}/claimsMappingPolicies",
+    )
+    if existing and existing.get("value"):
+        for p in existing["value"]:
+            if p.get("displayName") == policy_name:
+                print(f"  Claims policy: already assigned ({p['id']})")
+                return
+
+    # Check if policy exists globally (reuse)
+    all_policies = graph_request(
+        "GET", "/policies/claimsMappingPolicies",
+    )
+    policy_id = None
+    if all_policies and all_policies.get("value"):
+        for p in all_policies["value"]:
+            if p.get("displayName") == policy_name:
+                policy_id = p["id"]
+                print(f"  Claims policy: exists ({policy_id})")
+                break
+
+    # Create policy if not found
+    if not policy_id:
+        policy_definition = json.dumps({
+            "ClaimsMappingPolicy": {
+                "Version": 1,
+                "IncludeBasicClaimSet": "true",
+                "ClaimsSchema": [
+                    {
+                        "Source": "user",
+                        "ID": "objectid",
+                        "SamlClaimType": (
+                            "http://schemas.xmlsoap.org/ws/2005/05/"
+                            "identity/claims/nameidentifier"
+                        ),
+                    },
+                ],
+            },
+        })
+        resp = graph_request("POST", "/policies/claimsMappingPolicies", {
+            "definition": [policy_definition],
+            "displayName": policy_name,
+            "isOrganizationDefault": False,
+        })
+        if resp and resp.get("id"):
+            policy_id = resp["id"]
+            print(f"  Claims policy: created ({policy_id})")
+        else:
+            print("  WARNING: Failed to create claims mapping policy")
+            print("  Manually set NameID to user.objectid in Entra portal:")
+            print("    Enterprise Apps > Salesforce SSO > Single sign-on > "
+                  "Edit Attributes & Claims > NameID = user.objectid")
+            return
+
+    # Assign policy to SP
+    graph_request(
+        "POST",
+        f"/servicePrincipals/{sp_obj_id}/claimsMappingPolicies/$ref",
+        {
+            "@odata.id": (
+                f"https://graph.microsoft.com/v1.0/"
+                f"policies/claimsMappingPolicies/{policy_id}"
+            ),
+        },
+    )
+    print(f"  Claims policy: assigned to service principal")
+
+
+def _sso_ensure_signing_cert(org: str) -> str | None:
+    """Ensure a self-signed certificate exists for SAML request signing.
+
+    Returns the 15-char Certificate record ID, or None on failure.
+    """
+    CERT_NAME = "SAML_Request_Signing"
+
+    # Check if already exists
+    existing = tooling_query(
+        org, f"SELECT Id FROM Certificate "
+        f"WHERE DeveloperName = '{CERT_NAME}'",
+    )
+    if existing:
+        cert_id = existing[0]["Id"][:15]
+        print(f"  Signing cert: exists ({cert_id})")
+        return cert_id
+
+    # Create via mdapi deploy (Certificate type needs mdapi format)
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+        certs_dir = os.path.join(d, "certs")
+        os.makedirs(certs_dir)
+
+        with open(os.path.join(d, "package.xml"), "w") as f:
+            f.write(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<Package xmlns="http://soap.sforce.com/2006/04/metadata">'
+                f"<types><members>{CERT_NAME}</members>"
+                "<name>Certificate</name></types>"
+                "<version>62.0</version></Package>"
+            )
+        with open(os.path.join(certs_dir, f"{CERT_NAME}.crt-meta.xml"), "w") as f:
+            f.write(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<Certificate xmlns="http://soap.sforce.com/2006/04/metadata">'
+                "<keySize>2048</keySize>"
+                "<masterLabel>SAML Request Signing</masterLabel>"
+                "</Certificate>"
+            )
+
+        result = run(
+            f'sf project deploy start -o {org} --metadata-dir "{d}" --json',
+            parse_json=True,
+        )
+        if result is None:
+            print("  WARNING: Could not create signing certificate")
+            return None
+
+    # Re-query to get the ID
+    certs = tooling_query(
+        org, f"SELECT Id FROM Certificate "
+        f"WHERE DeveloperName = '{CERT_NAME}'",
+    )
+    if certs:
+        cert_id = certs[0]["Id"][:15]
+        print(f"  Signing cert: created ({cert_id})")
+        return cert_id
+
+    print("  WARNING: Certificate deploy succeeded but record not found")
+    return None
+
+
+def _sso_create_saml_config(org: str, tenant_id: str, app_id: str,
+                            cert_base64: str | None,
+                            instance_url: str) -> bool:
+    """Create SAML SSO config in Salesforce via Metadata API (idempotent)."""
+    issuer = f"https://sts.windows.net/{tenant_id}/"
+    login_url = f"https://login.microsoftonline.com/{tenant_id}/saml2"
+    logout_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/logout"
+    entity_id = instance_url
+
+    if not cert_base64:
+        print("  ERROR: No SAML signing certificate available")
+        print("  Download the Base64 certificate from:")
+        print("    Entra portal > Enterprise Apps > Salesforce SSO > "
+              "Single sign-on > SAML Signing Certificate > Download")
+        return False
+
+    # Clean up cert (remove PEM headers/footers, newlines)
+    cert_clean = (
+        cert_base64
+        .replace("-----BEGIN CERTIFICATE-----", "")
+        .replace("-----END CERTIFICATE-----", "")
+        .replace("\n", "")
+        .replace("\r", "")
+        .strip()
+    )
+
+    # Ensure a self-signed cert exists for request signing
+    signing_cert_id = _sso_ensure_signing_cert(org)
+    if not signing_cert_id:
+        print("  ERROR: Cannot create SAML config without signing certificate")
+        return False
+
+    # Deploy SamlSsoConfig via source metadata
+    sso_xml = textwrap.dedent(f"""\
         <?xml version="1.0" encoding="UTF-8"?>
-        <AuthProvider xmlns="http://soap.sforce.com/2006/04/metadata">
-            <friendlyName>Azure AD</friendlyName>
-            <providerType>OpenIdConnect</providerType>
-            <authorizeUrl>https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize</authorizeUrl>
-            <tokenUrl>https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token</tokenUrl>
-            <userInfoUrl>https://graph.microsoft.com/oidc/userinfo</userInfoUrl>
-            <defaultScopes>openid email profile offline_access</defaultScopes>
-            <consumerKey>{app_id}</consumerKey>
-            <consumerSecret>{secret}</consumerSecret>
-            <registrationHandler>AzureADRegistrationHandler</registrationHandler>
-            <executionUser>{admin_username}</executionUser>
-            <sendAccessTokenInHeader>true</sendAccessTokenInHeader>
-            <sendClientCredentialsInHeader>false</sendClientCredentialsInHeader>
-        </AuthProvider>
+        <SamlSsoConfig xmlns="http://soap.sforce.com/2006/04/metadata">
+            <name>Azure AD SAML</name>
+            <issuer>{issuer}</issuer>
+            <loginUrl>{login_url}</loginUrl>
+            <logoutUrl>{logout_url}</logoutUrl>
+            <validationCert>{cert_clean}</validationCert>
+            <samlEntityId>{entity_id}</samlEntityId>
+            <identityLocation>SubjectNameId</identityLocation>
+            <identityMapping>FederationId</identityMapping>
+            <samlVersion>SAML2_0</samlVersion>
+            <requestSigningCertId>{signing_cert_id}</requestSigningCertId>
+        </SamlSsoConfig>
     """)
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as work_dir:
         init_sfdx_project(work_dir)
 
-        # Write Auth Provider metadata
-        ap_dir = os.path.join(
-            work_dir, "force-app", "main", "default", "authproviders",
+        sso_dir = os.path.join(
+            work_dir, "force-app", "main", "default", "samlSsoConfigs",
         )
-        os.makedirs(ap_dir, exist_ok=True)
-        ap_path = os.path.join(ap_dir, "AzureAD.authprovider-meta.xml")
-        with open(ap_path, "w", encoding="utf-8") as f:
-            f.write(auth_provider_xml)
-        print(f"  Generated: authproviders/AzureAD.authprovider-meta.xml")
-
-        # Check for Apex Registration Handler in repo
-        repo_cls_dir = os.path.join(
-            REPO_ROOT, "salesforce", "force-app", "main", "default", "classes",
+        os.makedirs(sso_dir, exist_ok=True)
+        sso_path = os.path.join(
+            sso_dir, "Azure_AD_SAML.samlssoconfig-meta.xml",
         )
-        cls_name = "AzureADRegistrationHandler"
-        repo_cls = os.path.join(repo_cls_dir, f"{cls_name}.cls")
-        repo_meta = os.path.join(repo_cls_dir, f"{cls_name}.cls-meta.xml")
+        with open(sso_path, "w", encoding="utf-8") as f:
+            f.write(sso_xml)
+        print("  Generated: Azure_AD_SAML.samlssoconfig-meta.xml")
 
-        if os.path.exists(repo_cls) and os.path.exists(repo_meta):
-            # Copy Apex class into temp deploy dir
-            cls_dir = os.path.join(
-                work_dir, "force-app", "main", "default", "classes",
-            )
-            os.makedirs(cls_dir, exist_ok=True)
-            import shutil
-            shutil.copy2(repo_cls, cls_dir)
-            shutil.copy2(repo_meta, cls_dir)
-            print(f"  Included: classes/{cls_name}.cls")
-        else:
-            print(f"  WARNING: {cls_name}.cls not found in repo")
-            print("  The Auth Provider requires this Apex class to be deployed first")
-
-        # Deploy
-        if not has_sf_cli:
-            print("  SKIPPED: sf CLI not available -- deploy manually")
-            return False
-
-        print("  Deploying Auth Provider to Salesforce...")
+        print("  Deploying SAML SSO config...")
         return deploy_metadata(org, work_dir)
 
 
+def _sso_enable_on_login_page(org: str, sso_name: str = "Azure AD SAML") -> bool:
+    """Enable SAML SSO provider on My Domain login page (idempotent).
+
+    Uses Tooling API to query AuthConfig and SamlSsoConfig, then creates
+    an AuthConfigProviders junction record via REST API.
+    """
+    access_token, instance_url = get_access_token(org)
+    if not access_token:
+        print("  ERROR: Could not get access token for My Domain config")
+        return False
+
+    # Get the org's default AuthConfig
+    auth_configs = tooling_query(
+        org, "SELECT Id FROM AuthConfig WHERE Type = 'OrgDefault' LIMIT 1",
+    )
+    if not auth_configs:
+        print("  WARNING: No OrgDefault AuthConfig found")
+        print("  This is expected for brand-new orgs -- enable manually:")
+        print("    Setup > My Domain > Authentication Configuration > Edit")
+        return False
+    auth_config_id = auth_configs[0]["Id"]
+    print(f"  AuthConfig (OrgDefault): {auth_config_id}")
+
+    # Get the SamlSsoConfig we just deployed
+    saml_configs = tooling_query(
+        org,
+        f"SELECT Id FROM SamlSsoConfig WHERE DeveloperName = "
+        f"'{sso_name.replace(' ', '_')}' LIMIT 1",
+    )
+    if not saml_configs:
+        # Try by Name field
+        saml_configs = tooling_query(
+            org,
+            f"SELECT Id FROM SamlSsoConfig WHERE Name = '{sso_name}' LIMIT 1",
+        )
+    if not saml_configs:
+        print(f"  WARNING: SamlSsoConfig '{sso_name}' not found")
+        print("  The metadata deploy may not have completed yet")
+        return False
+    saml_sso_id = saml_configs[0]["Id"]
+    print(f"  SamlSsoConfig: {saml_sso_id}")
+
+    # Check if already linked
+    existing = tooling_query(
+        org,
+        f"SELECT Id FROM AuthConfigProviders "
+        f"WHERE AuthConfigId = '{auth_config_id}' "
+        f"AND SamlSsoConfigId = '{saml_sso_id}'",
+    )
+    if existing:
+        print(f"  Already enabled on login page")
+        return True
+
+    # Create the junction record via REST API
+    ok, resp = sf_rest_post(
+        instance_url, access_token,
+        "/tooling/sobjects/AuthConfigProviders",
+        {
+            "AuthConfigId": auth_config_id,
+            "SamlSsoConfigId": saml_sso_id,
+        },
+    )
+    if ok:
+        print(f"  Enabled '{sso_name}' on My Domain login page")
+        return True
+
+    if isinstance(resp, str) and "DUPLICATE_VALUE" in resp:
+        print(f"  Already enabled on login page")
+        return True
+
+    print(f"  WARNING: Could not enable on login page: {str(resp)[:200]}")
+    print("  Enable manually: Setup > My Domain > Authentication Configuration > Edit")
+    return False
+
+
 def step_sso(org: str) -> dict:
-    """Configure SSO Federation between Azure AD and Salesforce."""
+    """Configure SAML SSO Federation between Azure AD and Salesforce."""
     result = {"app_id": None, "instance_url": None}
 
     # Prerequisites
@@ -518,46 +855,40 @@ def step_sso(org: str) -> dict:
     if tenant_id is None:
         return result
 
-    # Create Entra App
-    print("\n  --- Create Entra App Registration ---")
-    app_id, obj_id, secret = _sso_create_entra_app(tenant_id)
-    if not app_id:
-        return result
-    result["app_id"] = app_id
-
-    # Authenticate to Salesforce
+    # Authenticate to Salesforce (need instance_url for Entity ID / ACS)
     print("\n  --- Authenticate to Salesforce ---")
     instance_url, admin_username = _sso_authenticate_salesforce(org, has_sf_cli)
     if not instance_url:
         return result
     result["instance_url"] = instance_url
 
-    # Update redirect URI
-    print("\n  --- Update Redirect URI ---")
-    _sso_update_redirect_uri(obj_id, instance_url)
-
-    # Generate metadata and deploy
-    print("\n  --- Generate and Deploy Auth Provider ---")
-    _sso_generate_and_deploy(
-        org, tenant_id, app_id, secret,
-        instance_url, admin_username, has_sf_cli,
+    # Create Enterprise App with SAML SSO
+    print("\n  --- Create Entra Enterprise App (SAML) ---")
+    app_id, sp_obj_id, cert_base64 = _sso_create_saml_enterprise_app(
+        tenant_id, instance_url,
     )
+    if not app_id:
+        return result
+    result["app_id"] = app_id
+
+    # Create SAML SSO config in Salesforce
+    print("\n  --- Create SAML SSO Config in Salesforce ---")
+    deployed = _sso_create_saml_config(
+        org, tenant_id, app_id, cert_base64, instance_url,
+    )
+
+    # Enable on My Domain login page
+    if deployed:
+        print("\n  --- Enable on My Domain Login Page ---")
+        _sso_enable_on_login_page(org)
 
     # Verify
     print("\n  --- Verify ---")
-    app = run(
-        f'az ad app show --id "{app_id}" '
-        '--query "{{appId:appId, redirectUris:web.redirectUris}}" -o json',
-        parse_json=True,
-    )
-    if app:
-        print(f"  Entra App ID:     {app.get('appId', '?')}")
-        print(f"  Redirect URIs:    {app.get('redirectUris', [])}")
+    print(f"  Entra App ID:       {app_id}")
+    print(f"  Identifier URI:     {instance_url}")
 
-    sso_url = f"{instance_url}/services/auth/sso/AzureAD"
-    print(f"\n  Test SSO: {sso_url}")
-    print("  Next: Enable 'Azure AD' on My Domain login page")
-    print("    Setup > My Domain > Authentication Configuration > Edit")
+    sso_test_url = f"{instance_url}"
+    print(f"\n  Test: Go to {sso_test_url} and click 'Azure AD SAML' on login page")
 
     return result
 
@@ -1373,8 +1704,7 @@ def _print_summary(results: dict, steps_to_run: set, start_time: float,
     else:
         print("  4. azd env set SF_SERVICE_ACCOUNT_USERNAME <svc@your-org.my.salesforce.com>")
 
-    print("  5. Enable 'Azure AD' on My Domain login page (if SSO was configured):")
-    print("     Setup > My Domain > Authentication Configuration > Edit")
+    print("  5. Verify SSO: Go to your SF login page and click 'Azure AD SAML'")
     print("  6. Deploy: azd up")
     print()
 
@@ -1498,7 +1828,7 @@ def main():
         step_num += 1
         print()
         print("=" * 60)
-        print(f"  Step {step_num}/{total}: SSO Federation (Entra OIDC)")
+        print(f"  Step {step_num}/{total}: SSO Federation (Entra SAML)")
         print("=" * 60)
         print()
         try:

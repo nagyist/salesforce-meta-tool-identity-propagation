@@ -146,7 +146,7 @@ python scripts/setup-sf-org.py --org <alias> --email <email> --cert certs/sf-jwt
 
 The 5 SF Setup Steps (run individually with `--only <step>`):
 1. **eca** — Create Connected App with JWT Bearer flow + X.509 certificate + profile pre-authorization
-2. **sso** — Entra App Registration + SF Auth Provider (interactive browser login)
+2. **sso** — Entra Enterprise App (SAML) + SF SamlSsoConfig + self-signed cert (no Apex)
 3. **demo** — Custom "Standard User - No Delete" profile + demo user + test data
 4. **svcacct** — Service account with Minimum Access profile + `MCP_OBO_Service_Account` Permission Set
 5. **fedid** — Set FederationIdentifier on SF users from Azure AD `oid`

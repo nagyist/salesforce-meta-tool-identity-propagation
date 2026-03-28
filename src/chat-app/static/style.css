@@ -721,6 +721,44 @@ body {
 
 .stat-sep { color: #ccc; }
 
+.token-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: #f5f0ff;
+  border-bottom: 1px solid #e0d8f0;
+  font-size: 11px;
+  color: #6b5b95;
+  flex-shrink: 0;
+}
+
+.message-tokens {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 11px;
+  color: #999;
+}
+
+.tool-call-usage {
+  display: flex;
+  gap: 10px;
+  padding: 4px 12px 6px;
+  font-size: 11px;
+  color: #6b5b95;
+  border-top: 1px solid #f0f0f0;
+}
+
+.timeline-group-tokens {
+  margin-left: auto;
+  color: #6b5b95;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 /* Waterfall timeline */
 .tool-timeline {
   flex: 1;

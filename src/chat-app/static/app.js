@@ -15,6 +15,11 @@ let totalToolCalls = 0;
 let totalErrors = 0;
 let totalElapsedMs = 0;
 
+// Token usage tracking
+let totalInputTokens = 0;
+let totalOutputTokens = 0;
+let totalTokens = 0;
+
 // Debug panel state
 let debugEventSource = null;
 let debugFilter = 'all';
@@ -406,6 +411,13 @@ function startNewChat() {
     totalToolCalls = 0;
     totalErrors = 0;
     totalElapsedMs = 0;
+    totalInputTokens = 0;
+    totalOutputTokens = 0;
+    totalTokens = 0;
+
+    // Reset token stats display
+    const tokenStatsEl = document.getElementById('tokenStats');
+    if (tokenStatsEl) { tokenStatsEl.innerHTML = ''; tokenStatsEl.style.display = 'none'; }
 
     // Clear chat UI
     const container = document.getElementById('chatContainer');
@@ -522,6 +534,15 @@ async function sendMessage() {
         lastResponseId = data.response_id;
         debugLog('CHAT', 'Response in ' + (elapsedMs / 1000).toFixed(1) + 's | type=' + data.type + ' | tools=' + (data.tool_calls ? data.tool_calls.length : 0));
 
+        // Track token usage
+        if (data.usage) {
+            totalInputTokens += data.usage.input_tokens || 0;
+            totalOutputTokens += data.usage.output_tokens || 0;
+            totalTokens += data.usage.total_tokens || 0;
+            debugLog('CHAT', 'Tokens: in=' + data.usage.input_tokens + ' out=' + data.usage.output_tokens + ' total=' + data.usage.total_tokens + ' | session=' + totalTokens);
+            updateTokenStats();
+        }
+
         if (appInsights) appInsights.trackEvent({
             name: 'ChatResponse',
             properties: { type: data.type, responseId: data.response_id, requestId: data.request_id }
@@ -542,6 +563,7 @@ async function sendMessage() {
                     error: tc.error,
                 })),
                 agentText: data.text || '',
+                usage: data.usage || null,
             };
             toolCallHistory.push(entry);
             totalToolCalls += data.tool_calls.length;
@@ -566,10 +588,13 @@ async function sendMessage() {
 function handleResponse(data) {
     // Render completed tool calls as collapsible cards
     if (data.tool_calls && data.tool_calls.length > 0) {
-        for (const tc of data.tool_calls) {
+        for (let i = 0; i < data.tool_calls.length; i++) {
+            const tc = data.tool_calls[i];
             const tcSource = tc.name === 'memory_search' ? 'MEM' : 'MCP';
             debugLog(tcSource, 'tool=' + tc.name + (tc.error ? ' ERROR: ' + tc.error : ' OK'));
-            addToolCallCard(tc);
+            // Show usage on the last tool call card of this turn
+            const isLast = i === data.tool_calls.length - 1;
+            addToolCallCard(tc, isLast ? data.usage : null);
         }
     }
 
@@ -577,7 +602,7 @@ function handleResponse(data) {
         setLoading(false);
         showApprovalUI(data.approval_ids);
     } else if (data.text) {
-        addMessage('assistant', data.text);
+        addMessage('assistant', data.text, data.usage);
         // Show smart suggestions based on tool calls
         showSmartSuggestions(data.tool_calls || []);
     } else {
@@ -664,7 +689,7 @@ function getSuggestionsForTool(tc) {
 // Tool call cards (completed calls — inline in chat)
 // ---------------------------------------------------------------------------
 
-function addToolCallCard(tc) {
+function addToolCallCard(tc, usage) {
     const container = document.getElementById('chatContainer');
     const div = document.createElement('div');
     div.className = 'message tool-call';
@@ -691,6 +716,15 @@ function addToolCallCard(tc) {
         }
     }
 
+    let usageHtml = '';
+    if (usage) {
+        usageHtml = '<div class="tool-call-usage">' +
+            '<span title="Input tokens">in: ' + formatTokenCount(usage.input_tokens || 0) + '</span>' +
+            '<span title="Output tokens">out: ' + formatTokenCount(usage.output_tokens || 0) + '</span>' +
+            '<span title="Total tokens this turn">total: ' + formatTokenCount(usage.total_tokens || 0) + '</span>' +
+            '</div>';
+    }
+
     div.innerHTML =
         '<div class="message-avatar tool-avatar">T</div>' +
         '<div class="message-content tool-call-content">' +
@@ -713,6 +747,7 @@ function addToolCallCard(tc) {
                         '<pre class="tool-call-code tool-call-output">' + escapeHtml(outputDisplay) + '</pre>' +
                     '</div>' : '') +
             '</div>' +
+            usageHtml +
         '</div>';
 
     container.appendChild(div);
@@ -770,6 +805,24 @@ function updateToolStats() {
     document.getElementById('statErrors').textContent = totalErrors + ' errors';
 }
 
+function formatTokenCount(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+}
+
+function updateTokenStats() {
+    const el = document.getElementById('tokenStats');
+    if (!el) return;
+    el.innerHTML =
+        '<span title="Total input tokens">in: ' + formatTokenCount(totalInputTokens) + '</span>' +
+        '<span class="stat-sep">|</span>' +
+        '<span title="Total output tokens">out: ' + formatTokenCount(totalOutputTokens) + '</span>' +
+        '<span class="stat-sep">|</span>' +
+        '<span title="Total tokens used this session">total: ' + formatTokenCount(totalTokens) + '</span>';
+    el.style.display = 'flex';
+}
+
 function renderToolTimeline() {
     const container = document.getElementById('toolTimeline');
     container.innerHTML = '';
@@ -794,9 +847,14 @@ function renderToolTimeline() {
         const timeStr = time.getHours().toString().padStart(2, '0') + ':' +
                         time.getMinutes().toString().padStart(2, '0');
 
+        const tokenLabel = entry.usage
+            ? '<span class="timeline-group-tokens" title="in: ' + (entry.usage.input_tokens || 0) + ' | out: ' + (entry.usage.output_tokens || 0) + '">' + formatTokenCount(entry.usage.total_tokens || 0) + ' tok</span>'
+            : '';
+
         group.innerHTML = '<div class="timeline-group-header">' +
             '<span class="timeline-group-time">' + timeStr + '</span>' +
             '<span class="timeline-group-msg">"' + escapeHtml(entry.userMessage.substring(0, 50)) + '"</span>' +
+            tokenLabel +
         '</div>';
 
         const perToolMs = entry.elapsedMs / Math.max(entry.toolCalls.length, 1);
@@ -1382,6 +1440,16 @@ async function submitApproval(approvalIds, approve) {
 
         const data = await resp.json();
         lastResponseId = data.response_id;
+
+        // Track token usage from approval response
+        if (data.usage) {
+            totalInputTokens += data.usage.input_tokens || 0;
+            totalOutputTokens += data.usage.output_tokens || 0;
+            totalTokens += data.usage.total_tokens || 0;
+            debugLog('CHAT', 'Approval tokens: in=' + data.usage.input_tokens + ' out=' + data.usage.output_tokens + ' total=' + data.usage.total_tokens);
+            updateTokenStats();
+        }
+
         handleResponse(data);
     } catch (err) {
         addSystemMessage('Approval error: ' + err.message);
@@ -1416,7 +1484,7 @@ function handleGlobalKeyDown(event) {
 // UI helpers
 // ---------------------------------------------------------------------------
 
-function addMessage(role, text) {
+function addMessage(role, text, usage) {
     const container = document.getElementById('chatContainer');
     const avatar = role === 'user' ? 'U' : 'A';
 
@@ -1428,11 +1496,20 @@ function addMessage(role, text) {
         content = escapeHtml(text);
     }
 
+    let tokenHtml = '';
+    if (role === 'assistant' && usage) {
+        tokenHtml = '<div class="message-tokens">' +
+            '<span title="Input tokens">in: ' + formatTokenCount(usage.input_tokens) + '</span>' +
+            '<span title="Output tokens">out: ' + formatTokenCount(usage.output_tokens) + '</span>' +
+            '<span title="Total tokens for this turn">total: ' + formatTokenCount(usage.total_tokens) + '</span>' +
+            '</div>';
+    }
+
     const div = document.createElement('div');
     div.className = 'message ' + role;
     div.innerHTML =
         '<div class="message-avatar">' + avatar + '</div>' +
-        '<div class="message-content">' + content + '</div>';
+        '<div class="message-content">' + content + tokenHtml + '</div>';
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }

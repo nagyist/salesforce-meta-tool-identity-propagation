@@ -199,6 +199,21 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
         if not parsed["text"]:
             parsed["text"] = getattr(response, "output_text", "") or ""
 
+        # Extract token usage if available
+        usage = getattr(response, "usage", None)
+        usage_dict = None
+        if usage:
+            usage_dict = {
+                "input_tokens": getattr(usage, "input_tokens", 0),
+                "output_tokens": getattr(usage, "output_tokens", 0),
+                "total_tokens": getattr(usage, "total_tokens", 0),
+            }
+            logger.info(
+                "agent_usage request_id=%s input=%d output=%d total=%d",
+                request_id, usage_dict["input_tokens"],
+                usage_dict["output_tokens"], usage_dict["total_tokens"],
+            )
+
         logger.info(
             "agent_response request_id=%s response_id=%s type=%s text_preview=%s",
             request_id, response.id, parsed["type"], (parsed["text"] or "")[:200],
@@ -208,6 +223,7 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
             "response_id": response.id,
             "request_id": request_id,
             **parsed,
+            **({"usage": usage_dict} if usage_dict else {}),
         }
     finally:
         openai_client.close()
@@ -273,9 +289,19 @@ async def approve_tools(access_token: str, previous_response_id: str,
         if not parsed["text"]:
             parsed["text"] = getattr(response, "output_text", "") or ""
 
+        usage = getattr(response, "usage", None)
+        usage_dict = None
+        if usage:
+            usage_dict = {
+                "input_tokens": getattr(usage, "input_tokens", 0),
+                "output_tokens": getattr(usage, "output_tokens", 0),
+                "total_tokens": getattr(usage, "total_tokens", 0),
+            }
+
         return {
             "response_id": response.id,
             **parsed,
+            **({"usage": usage_dict} if usage_dict else {}),
         }
     finally:
         openai_client.close()

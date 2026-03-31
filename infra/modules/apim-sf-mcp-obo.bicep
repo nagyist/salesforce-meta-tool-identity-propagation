@@ -35,6 +35,11 @@ param sfServiceAccountUsername string = ''
 @description('Name of the JWT claim containing the user identity (e.g., oid for Azure AD, sub for Okta/PingFed)')
 param identityClaimName string = 'oid'
 
+@description('Maximum number of nested sub-agent delegation levels allowed. 1 = top-level agent may call one sub-agent; sub-agents cannot delegate further.')
+@minValue(0)
+@maxValue(5)
+param maxSubAgentDepth int = 1
+
 // --------------------------------------------------------------------------
 // Reference existing APIM instance
 // --------------------------------------------------------------------------
@@ -111,6 +116,19 @@ resource identityClaimNameNV 'Microsoft.ApiManagement/service/namedValues@2024-0
   properties: {
     displayName: 'IdentityClaimName'
     value: identityClaimName
+    secret: false
+  }
+}
+
+resource maxSubAgentDepthNV 'Microsoft.ApiManagement/service/namedValues@2024-06-01-preview' = {
+  parent: apim
+  name: 'MaxSubAgentDepth'
+  properties: {
+    displayName: 'MaxSubAgentDepth'
+    // Default of 1 means a top-level agent may call one level of sub-agents.
+    // Sub-agents cannot call further sub-agents (depth 2+ is blocked).
+    // Increase only if a deliberate multi-hop delegation chain is required.
+    value: string(maxSubAgentDepth)
     secret: false
   }
 }

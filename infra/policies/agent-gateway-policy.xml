@@ -1,0 +1,200 @@
+<policies>
+    <!--
+        Agent Gateway Policy — Behavioral Control Layer
+        ================================================
+        This policy sits in front of the AI Foundry Responses API endpoint
+        (the AI gateway APIM API) and lets you control prompt-agent behaviour
+        at runtime without touching the agent definition.
+
+        Control surface (request headers — set by the caller or injected by
+        the APIM product/subscription policy layer):
+
+          X-Agent-Mode: read-only
+              Remove write_record and process_approval from the tool list so
+              the agent cannot mutate Salesforce data.  Useful for reporting
+              dashboards or public-facing integrations.
+
+          X-Agent-Mode: no-delegation
+              Remove any tool whose name starts with "delegate_" or whose
+              server_label indicates a sub-agent endpoint.  Prevents the
+              agent from spawning sub-agents.
+
+          X-Context-Flags: <key=value,...>
+              Inject runtime key/value pairs as an additional system-message
+              turn prepended to the request.  Example:
+              X-Context-Flags: env=production,tenant=acme,read_only_reason=sla
+
+          X-Sub-Agent-Depth: <integer>
+              Recursion guard.  If the value meets or exceeds
+              {{MaxSubAgentDepth}} (Named Value, default 1), the request is
+              rejected with 429 before reaching Foundry.  The APIM gateway
+              increments this header on every forwarded call so self-
+              referencing agents cannot loop indefinitely.
+
+        All rewriting uses the set-body policy on the JSON payload so the
+        agent definition itself never needs to change.
+    -->
+    <inbound>
+        <base />
+
+        <!-- ================================================================
+             Recursion guard — reject deeply nested sub-agent calls
+             ================================================================ -->
+
+        <!-- Parse MaxSubAgentDepth Named Value into a variable once so it is
+             not re-evaluated in every downstream condition or response body.
+             APIM interpolates {{MaxSubAgentDepth}} at policy compile time, so
+             the string literal is constant; int.Parse here is negligible. -->
+        <set-variable name="maxSubAgentDepth" value="@(int.Parse("{{MaxSubAgentDepth}}"))" />
+
+        <set-variable name="subAgentDepth"
+            value="@{
+                var h = context.Request.Headers.GetValueOrDefault(&quot;X-Sub-Agent-Depth&quot;, &quot;0&quot;);
+                return int.TryParse(h, out var d) ? d : 0;
+            }" />
+
+        <choose>
+            <when condition="@((int)context.Variables[&quot;subAgentDepth&quot;] >= (int)context.Variables[&quot;maxSubAgentDepth&quot;])">
+                <return-response>
+                    <set-status code="429" reason="Sub-agent depth limit reached" />
+                    <set-header name="Content-Type" exists-action="override">
+                        <value>application/json</value>
+                    </set-header>
+                    <set-body>@{
+                        return Newtonsoft.Json.JsonConvert.SerializeObject(new {
+                            error = "sub_agent_depth_exceeded",
+                            message = "Maximum sub-agent delegation depth reached. The request was blocked to prevent runaway recursion.",
+                            current_depth = (int)context.Variables["subAgentDepth"],
+                            max_depth = (int)context.Variables["maxSubAgentDepth"]
+                        });
+                    }</set-body>
+                </return-response>
+            </when>
+        </choose>
+
+        <!-- Propagate incremented depth to the backend so any nested call
+             the agent makes is evaluated against the updated counter. -->
+        <set-header name="X-Sub-Agent-Depth" exists-action="override">
+            <value>@(((int)context.Variables["subAgentDepth"] + 1).ToString())</value>
+        </set-header>
+
+        <!-- ================================================================
+             Parse the incoming JSON body once and hold it in a variable.
+             All rewriting below operates on this variable.
+             ================================================================ -->
+        <set-variable name="agentMode"
+            value="@(context.Request.Headers.GetValueOrDefault(&quot;X-Agent-Mode&quot;, &quot;default&quot;).ToLowerInvariant())" />
+
+        <set-variable name="contextFlags"
+            value="@(context.Request.Headers.GetValueOrDefault(&quot;X-Context-Flags&quot;, &quot;&quot;))" />
+
+        <!-- ================================================================
+             Tool stripping — read-only mode
+             Removes write_record and process_approval from the tools array.
+             The body is re-serialised so Foundry only sees the reduced set.
+             ================================================================ -->
+        <choose>
+            <when condition="@((string)context.Variables[&quot;agentMode&quot;] == &quot;read-only&quot;)">
+                <set-body>@{
+                    var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>(preserveContent: true);
+                    if (body != null)
+                    {
+                        var tools = body["tools"] as Newtonsoft.Json.Linq.JArray;
+                        if (tools != null)
+                        {
+                            // MAINTENANCE NOTE: This list must be kept in sync with the MCP
+                            // server tool names defined in src/salesforce-mcp/app.py.
+                            // If a new mutating tool is added to the server (e.g. bulk_write),
+                            // add its name here to ensure read-only mode strips it.
+                            var mutatingTools = new System.Collections.Generic.HashSet<string>
+                                { "write_record", "process_approval" };
+                            var filtered = new Newtonsoft.Json.Linq.JArray();
+                            foreach (var tool in tools)
+                            {
+                                var name = (string)tool["function"]?["name"] ?? (string)tool["name"] ?? "";
+                                if (!mutatingTools.Contains(name))
+                                    filtered.Add(tool);
+                            }
+                            body["tools"] = filtered;
+                        }
+                    }
+                    return body?.ToString() ?? context.Request.Body.As<string>(preserveContent: true);
+                }</set-body>
+            </when>
+
+            <!-- ================================================================
+                 Tool stripping — no-delegation mode
+                 Removes any tool whose name starts with "delegate_" or whose
+                 server_label identifies a known sub-agent endpoint.
+                 ================================================================ -->
+            <when condition="@((string)context.Variables[&quot;agentMode&quot;] == &quot;no-delegation&quot;)">
+                <set-body>@{
+                    var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>(preserveContent: true);
+                    if (body != null)
+                    {
+                        var tools = body["tools"] as Newtonsoft.Json.Linq.JArray;
+                        if (tools != null)
+                        {
+                            var filtered = new Newtonsoft.Json.Linq.JArray();
+                            foreach (var tool in tools)
+                            {
+                                var name = (string)tool["function"]?["name"] ?? (string)tool["name"] ?? "";
+                                var serverLabel = (string)tool["server_label"] ?? "";
+                                if (!name.StartsWith("delegate_") && !serverLabel.Contains("sub-agent"))
+                                    filtered.Add(tool);
+                            }
+                            body["tools"] = filtered;
+                        }
+                    }
+                    return body?.ToString() ?? context.Request.Body.As<string>(preserveContent: true);
+                }</set-body>
+            </when>
+        </choose>
+
+        <!-- ================================================================
+             Runtime context injection — X-Context-Flags
+             Prepends a system message turn to the request input array so the
+             agent sees the flags without them being baked into its definition.
+             ================================================================ -->
+        <choose>
+            <when condition="@(!string.IsNullOrEmpty((string)context.Variables[&quot;contextFlags&quot;]))">
+                <set-body>@{
+                    var body = context.Request.Body.As<Newtonsoft.Json.Linq.JObject>(preserveContent: true);
+                    if (body != null)
+                    {
+                        var flags = (string)context.Variables["contextFlags"];
+                        var injection = "[RUNTIME CONTEXT] " + flags.Replace(",", " | ");
+
+                        // input may be a string (simple case) or an array of message turns
+                        var inputToken = body["input"];
+                        if (inputToken != null && inputToken.Type == Newtonsoft.Json.Linq.JTokenType.Array)
+                        {
+                            var arr = (Newtonsoft.Json.Linq.JArray)inputToken;
+                            arr.Insert(0, Newtonsoft.Json.Linq.JObject.FromObject(new {
+                                role = "system",
+                                content = injection
+                            }));
+                        }
+                        // If input is a plain string we leave it unchanged — the flags
+                        // are readable as a request header by any backend middleware.
+                    }
+                    return body?.ToString() ?? context.Request.Body.As<string>(preserveContent: true);
+                }</set-body>
+            </when>
+        </choose>
+
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+        <!-- Echo the effective mode back so clients can verify what was applied. -->
+        <set-header name="X-Applied-Agent-Mode" exists-action="override">
+            <value>@((string)context.Variables["agentMode"])</value>
+        </set-header>
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

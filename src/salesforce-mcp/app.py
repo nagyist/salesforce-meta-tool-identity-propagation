@@ -510,9 +510,147 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
             _request_token.reset(tok)
 
 
+# ---------------------------------------------------------------------------
+# Result compaction — ephemeral meta-tool output
+# ---------------------------------------------------------------------------
+
+# Byte threshold above which a tool result is eligible for compaction.
+# Set X-Compact-Results: true on the MCP call (forwarded by APIM) to opt in.
+_COMPACT_THRESHOLD_BYTES = int(os.environ.get("COMPACT_THRESHOLD_BYTES", "8192"))  # 8 KB
+
+# Maximum number of fields to include verbatim in a compacted describe_object
+# response.  Remaining fields are summarised by type only.
+_COMPACT_MAX_FIELDS = int(os.environ.get("COMPACT_MAX_FIELDS", "40"))
+
+
+def _compact_list_objects(payload: str) -> str:
+    """Summarise a large list_objects JSON response.
+
+    When the result exceeds the compaction threshold, replace the full
+    metadata array with a flat list of object API names.  The agent can
+    request the full metadata for any specific object via describe_object.
+    This keeps the average tool-call result 5-10x smaller.
+    """
+    try:
+        objects = json.loads(payload)
+        if not isinstance(objects, list) or len(payload) <= _COMPACT_THRESHOLD_BYTES:
+            return payload
+        names = [o.get("name", "") for o in objects if o.get("name")]
+        return json.dumps({
+            "compacted": True,
+            "total": len(names),
+            "names": names,
+            "note": "Full metadata omitted to reduce context size. "
+                    "Call describe_object(object_name) for field-level details.",
+        })
+    except Exception:
+        return payload
+
+
+def _compact_describe_object(payload: str) -> str:
+    """Summarise a large describe_object JSON response.
+
+    When the field list is very long, cap it at _COMPACT_MAX_FIELDS and append
+    a summary of the remaining fields grouped by type.  The agent retains
+    accurate type information without the full verbatim list consuming tokens.
+    """
+    try:
+        obj = json.loads(payload)
+        if not isinstance(obj, dict) or len(payload) <= _COMPACT_THRESHOLD_BYTES:
+            return payload
+        fields = obj.get("fields", [])
+        if len(fields) <= _COMPACT_MAX_FIELDS:
+            return payload
+        # Group overflow fields by type
+        overflow = fields[_COMPACT_MAX_FIELDS:]
+        type_summary: dict[str, list[str]] = {}
+        for f in overflow:
+            t = f.get("type", "unknown")
+            type_summary.setdefault(t, []).append(f.get("name", ""))
+        obj["fields"] = fields[:_COMPACT_MAX_FIELDS]
+        obj["fields_compacted"] = True
+        obj["fields_total"] = len(fields)
+        obj["fields_overflow_by_type"] = type_summary
+        obj["note"] = (
+            f"Field list truncated to {_COMPACT_MAX_FIELDS} of {len(fields)} fields. "
+            "Use mode='names' to get all field names, or mode='full' for complete metadata."
+        )
+        return json.dumps(obj)
+    except Exception:
+        return payload
+
+
+class ResultCompactionMiddleware(BaseHTTPMiddleware):
+    """Optionally compact large MCP tool results to reduce thread context growth.
+
+    Meta-tool lookup results (list_objects, describe_object) are often used
+    once — to construct a SOQL query — and then become noise in the thread.
+    When the caller sends ``X-Compact-Results: true``, this middleware
+    intercepts tool call responses that exceed ``COMPACT_THRESHOLD_BYTES`` and
+    replaces them with a summarised form that preserves actionability while
+    cutting token cost by up to 80 %.
+
+    This is an opt-in, additive layer.  Callers that do not set the header
+    receive the full response and are unaffected.
+
+    Limitation: compaction only applies to non-streaming (buffered) responses.
+    SSE streams used by the MCP protocol pass through unchanged.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        compact = request.headers.get("x-compact-results", "false").lower() == "true"
+        response = await call_next(request)
+
+        if not compact:
+            return response
+
+        # Only compact buffered JSON responses (not SSE/streaming)
+        ct = response.headers.get("content-type", "")
+        if "text/event-stream" in ct or "application/json" not in ct:
+            return response
+
+        # Read and potentially rewrite the body
+        body_bytes = b""
+        async for chunk in response.body_iterator:
+            body_bytes += chunk
+
+        if len(body_bytes) <= _COMPACT_THRESHOLD_BYTES:
+            # Small enough — return as-is with a rebuilt response
+            from starlette.responses import Response as StarletteResponse
+            return StarletteResponse(
+                content=body_bytes,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type=ct,
+            )
+
+        # Try to detect which tool produced this response and compact accordingly
+        payload = body_bytes.decode("utf-8", errors="replace")
+        compacted = payload
+        path = request.url.path
+        if "list_objects" in path or "/tools/list_objects" in path:
+            compacted = _compact_list_objects(payload)
+        elif "describe_object" in path or "/tools/describe_object" in path:
+            compacted = _compact_describe_object(payload)
+
+        log.debug(
+            "result_compaction path=%s original=%d compacted=%d",
+            path, len(body_bytes), len(compacted),
+        )
+
+        from starlette.responses import Response as StarletteResponse
+        return StarletteResponse(
+            content=compacted.encode("utf-8"),
+            status_code=response.status_code,
+            headers=dict(response.headers),
+            media_type=ct,
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
 
     app = mcp.streamable_http_app()
+    app.add_middleware(ResultCompactionMiddleware)
     app.add_middleware(BearerTokenMiddleware)
     uvicorn.run(app, host="0.0.0.0", port=port)

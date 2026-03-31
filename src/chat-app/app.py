@@ -260,11 +260,16 @@ async def chat(request: Request):
     session_id = body.get("session_id", "unknown")
     agent_name = body.get("agent_name")
     project_endpoint = body.get("project_endpoint")
+    # Optional: cap the prompt token budget to prevent unbounded context growth
+    # in long-running conversations.  The Foundry runtime will truncate the
+    # oldest messages (sliding-window) to honour the budget.
+    max_prompt_tokens = body.get("max_prompt_tokens")
 
     if not access_token:
         raise HTTPException(status_code=401, detail="access_token required")
 
-    logger.info("chat_request session_id=%s agent=%s", session_id, agent_name or "default")
+    logger.info("chat_request session_id=%s agent=%s max_prompt_tokens=%s",
+                session_id, agent_name or "default", max_prompt_tokens)
 
     try:
         result = await call_agent(
@@ -273,6 +278,7 @@ async def chat(request: Request):
             previous_response_id=previous_response_id,
             agent_name=agent_name,
             project_endpoint=project_endpoint,
+            max_prompt_tokens=max_prompt_tokens,
         )
         return result
     except asyncio.TimeoutError:

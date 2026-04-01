@@ -298,19 +298,6 @@ module sfOboConnection 'modules/sf-obo-connection.bicep' = {
   }
 }
 
-// Agent behavioral gateway (runtime control layer in front of Foundry)
-// Depends on apimSfMcpObo because it uses the MaxSubAgentDepth Named Value
-// created by that module.
-module apimAgentGateway 'modules/apim-agent-gateway.bicep' = {
-  name: 'apim-agent-gateway'
-  scope: rg
-  params: {
-    apimName: apim.outputs.apimName
-    foundryProjectEndpoint: cognitive.outputs.projectEndpoint
-  }
-  dependsOn: [ apimSfMcpObo ]
-}
-
 // Grant APIM access to Key Vault certificates for JWT signing
 module keyvaultApimAccess 'modules/keyvault.bicep' = {
   name: 'keyvault-apim-access'
@@ -377,7 +364,6 @@ output SF_MCP_CONTAINER_APP_NAME string = sfMcpApp.outputs.sfMcpAppName
 output SF_MCP_FQDN string = sfMcpApp.outputs.sfMcpFqdn
 output SF_OBO_CONNECTION_NAME string = sfOboConnection.outputs.connectionName
 output APIM_SF_MCP_OBO_ENDPOINT string = apimSfMcpObo.outputs.sfMcpOboEndpoint
-output APIM_AGENT_GATEWAY_URL string = apimAgentGateway.outputs.agentGatewayUrl
 output KEY_VAULT_NAME string = keyvault.outputs.keyVaultName
 output LOG_ANALYTICS_WORKSPACE_ID string = monitoring.outputs.logAnalyticsWorkspaceGuid
 output AGENT_BOT_NAME string = !empty(agentBotMsaAppId) ? botService.outputs.botServiceName : '' // BCP318 is expected — conditional module

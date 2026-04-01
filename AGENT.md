@@ -99,17 +99,13 @@ azd up
 | `TEAMS_APP_TERMS_URL` | For Teams | Terms of use URL in Teams manifest |
 | `FOUNDRY_PROJECTS` | No | JSON list of Foundry projects `[{name, endpoint}]` — overrides dynamic discovery |
 | `AGENTS_CONFIG` | No | Static JSON agent config — fallback when dynamic discovery unavailable |
-| `MAX_SUB_AGENT_DEPTH` | No | Python-layer recursion guard for `call_sub_agent` (default: `1`) |
-| `COMPACT_THRESHOLD_BYTES` | No | MCP result size above which compaction is triggered (default: `8192`) |
-| `COMPACT_MAX_FIELDS` | No | Max describe_object fields before overflow summary is applied (default: `40`) |
 
 ### Key Paths
 
 **Infrastructure:**
 - `infra/main.bicep` — Orchestrator, all module wiring
 - `infra/main.bicepparam` — Environment variable → Bicep param mapping
-- `infra/modules/apim-sf-mcp-obo.bicep` — OBO APIM API (native MCP type), backend, Named Values (incl. `MaxSubAgentDepth`)
-- `infra/modules/apim-agent-gateway.bicep` — Agent behavioral gateway (read-only / no-delegation / context-flag injection)
+- `infra/modules/apim-sf-mcp-obo.bicep` — OBO APIM API (native MCP type), backend, Named Values
 - `infra/modules/apim-jwt-bearer-cert.bicep` — Key Vault → APIM certificate binding
 - `infra/modules/sf-obo-connection.bicep` — Foundry UserEntraToken connection
 - `infra/modules/cognitive.bicep` — AI Services account, project, App Insights connection
@@ -117,7 +113,6 @@ azd up
 - `infra/modules/bot-service.bicep` — Bot Service + Teams/DirectLine channels (conditional on msaAppId)
 - `infra/modules/keyvault.bicep` — Key Vault + APIM RBAC access
 - `infra/policies/sf-mcp-obo-policy.xml` — The OBO exchange policy (3-phase)
-- `infra/policies/agent-gateway-policy.xml` — Agent behavioral control policy (mode/flag/recursion guard)
 - `infra/policies/sf-mcp-obo-prm-policy.xml` — RFC 9728 PRM for OBO endpoint
 
 **Application:**

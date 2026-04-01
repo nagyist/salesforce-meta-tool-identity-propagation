@@ -3,20 +3,6 @@
 Used by both the web chat app and the Teams bot to call the Foundry agent.
 Each channel acquires the user's Azure AD token independently, then uses
 these helpers to interact with the Foundry Responses API.
-
-Sub-agent pattern
------------------
-Use ``call_sub_agent`` to delegate a discrete task to an agent running in a
-fresh, isolated thread.  Only the distilled text answer returns to the caller;
-all intermediate tool calls stay in the sub-agent's own context and never
-pollute the parent thread.
-
-Context compaction
-------------------
-Pass ``max_prompt_tokens`` to ``call_agent`` to tell the Foundry runtime to
-truncate the prompt when it would exceed that budget.  This keeps long
-conversations from consuming unbounded tokens without requiring any change to
-the agent definition.
 """
 
 import asyncio
@@ -27,11 +13,6 @@ import uuid
 from azure.core.credentials import AccessToken
 
 logger = logging.getLogger(__name__)
-
-# Maximum sub-agent nesting depth.  Calls that would exceed this are short-
-# circuited and return an explanatory string instead.  This prevents a prompt
-# agent from accidentally delegating to itself in a loop.
-MAX_SUB_AGENT_DEPTH = int(os.environ.get("MAX_SUB_AGENT_DEPTH", "1"))
 
 
 class UserTokenCredential:
@@ -170,7 +151,7 @@ def parse_output_items(output_items, request_id: str = ""):
 
 async def call_agent(access_token: str, message: str, previous_response_id: str = None,
                      agent_name: str = None, project_endpoint: str = None,
-                     timeout: float = 120, max_prompt_tokens: int = None) -> dict:
+                     timeout: float = 120) -> dict:
     """Send a message to the Foundry agent and return the parsed response.
 
     Args:
@@ -180,11 +161,6 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
         agent_name: Agent name (default: from AGENT_NAME env var)
         project_endpoint: Override for AI_FOUNDRY_PROJECT_ENDPOINT env var
         timeout: Request timeout in seconds
-        max_prompt_tokens: If set, asks the Foundry runtime to truncate the
-            prompt to stay within this token budget.  Useful for long-running
-            conversations where the accumulated tool-call history would
-            otherwise exhaust the model's context window.  The runtime drops
-            the oldest messages first (sliding-window behaviour).
 
     Returns:
         dict with keys: response_id, request_id, type, text,
@@ -193,8 +169,7 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
     request_id = str(uuid.uuid4())
     agent_name = agent_name or os.environ.get("AGENT_NAME", "salesforce-assistant")
 
-    logger.info("agent_call request_id=%s agent=%s max_prompt_tokens=%s",
-                request_id, agent_name, max_prompt_tokens)
+    logger.info("agent_call request_id=%s agent=%s", request_id, agent_name)
 
     project_client = create_foundry_client(access_token, project_endpoint)
     openai_client = project_client.get_openai_client()
@@ -206,24 +181,6 @@ async def call_agent(access_token: str, message: str, previous_response_id: str 
         }
         if previous_response_id:
             kwargs["previous_response_id"] = previous_response_id
-        if max_prompt_tokens:
-            # truncation_strategy is part of the Responses API spec; spread
-            # preserves any existing extra_body keys (e.g. agent_reference).
-            # If the caller already set truncation_strategy it will be
-            # overridden by this value — max_prompt_tokens takes precedence.
-            existing = kwargs.get("extra_body", {})
-            if "truncation_strategy" in existing:
-                logger.debug(
-                    "agent_call overriding existing truncation_strategy with max_prompt_tokens=%d",
-                    max_prompt_tokens,
-                )
-            kwargs["extra_body"] = {
-                **existing,
-                "truncation_strategy": {
-                    "type": "last_messages",
-                    "max_prompt_tokens": max_prompt_tokens,
-                },
-            }
 
         response = await asyncio.wait_for(
             asyncio.to_thread(openai_client.responses.create, **kwargs),
@@ -348,82 +305,3 @@ async def approve_tools(access_token: str, previous_response_id: str,
         }
     finally:
         openai_client.close()
-
-
-async def call_sub_agent(
-    access_token: str,
-    task: str,
-    agent_name: str = None,
-    project_endpoint: str = None,
-    depth: int = 0,
-    max_depth: int = None,
-    timeout: float = 60,
-) -> str:
-    """Invoke an agent in a fresh, isolated thread and return only its answer.
-
-    Sub-agent pattern
-    -----------------
-    The sub-agent runs without any ``previous_response_id``, so it starts with
-    a clean context.  All intermediate tool calls (schema lookups, SOQL
-    queries, etc.) stay in that isolated thread and are never written back into
-    the parent conversation.  Only the final text answer is returned.
-
-    Recursion guard
-    ---------------
-    ``depth`` tracks the current nesting level.  When ``depth >= max_depth``
-    the call is short-circuited and returns an explanatory string.  This
-    prevents a prompt agent from entering an infinite delegation loop if it
-    accidentally references itself as a tool.
-
-    Args:
-        access_token: User's Azure AD bearer token (propagated for identity).
-        task: The self-contained task description for the sub-agent.
-        agent_name: Sub-agent name.  Defaults to the value of ``AGENT_NAME``
-            env var (same as the parent), which is fine for schema-discovery
-            delegation.  Use a different name to delegate to a specialised agent.
-        project_endpoint: Foundry project endpoint.  Defaults to env var.
-        depth: Current delegation depth (0 = called directly by the app layer).
-        max_depth: Maximum allowed nesting.  Defaults to ``MAX_SUB_AGENT_DEPTH``
-            (env-configurable, default 1).
-        timeout: Per-call timeout in seconds.
-
-    Returns:
-        The sub-agent's final text answer, or an error string if the recursion
-        limit was hit or the call failed.
-    """
-    effective_max = max_depth if max_depth is not None else MAX_SUB_AGENT_DEPTH
-    if depth >= effective_max:
-        logger.warning(
-            "sub_agent_depth_exceeded depth=%d max=%d task_preview=%s",
-            depth, effective_max, task[:100],
-        )
-        return (
-            f"[Sub-agent call blocked: maximum delegation depth ({effective_max}) reached. "
-            "The task must be handled directly without further delegation.]"
-        )
-
-    logger.info(
-        "sub_agent_call depth=%d agent=%s task_preview=%s",
-        depth, agent_name or os.environ.get("AGENT_NAME", "salesforce-assistant"), task[:100],
-    )
-
-    try:
-        result = await call_agent(
-            access_token=access_token,
-            message=task,
-            agent_name=agent_name,
-            project_endpoint=project_endpoint,
-            timeout=timeout,
-            # No previous_response_id — fresh isolated context.
-            # The sub-agent starts from a clean slate and its tool-call
-            # history is never merged back into the parent thread.
-        )
-        answer = result.get("text", "")
-        logger.info(
-            "sub_agent_done depth=%d answer_preview=%s",
-            depth, answer[:200],
-        )
-        return answer or "[Sub-agent returned no text answer]"
-    except Exception as exc:
-        logger.error("sub_agent_error depth=%d error=%s", depth, exc)
-        return f"[Sub-agent error: {exc}]"

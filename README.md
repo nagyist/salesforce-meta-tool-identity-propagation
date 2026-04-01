@@ -74,10 +74,6 @@ For detailed technical explanations, see [docs/deepdive.md](docs/deepdive.md):
 - [**Tool Reference**](docs/deepdive.md#tool-reference) — Per-tool descriptions with Unix analogies
 - [**Identity Propagation: End-to-End**](docs/deepdive.md#identity-propagation-end-to-end) — Architecture, hop-by-hop token trace, caching layers, key guarantees
 - [**IdP Flexibility**](docs/deepdive.md#idp-flexibility) — How to swap Azure AD for Okta, PingFed, or another OIDC provider
-- [**Sub-Agent Pattern: Context Isolation**](docs/deepdive.md#sub-agent-pattern-context-isolation) — Delegate bounded tasks to isolated threads; recursion guard via APIM header
-- [**Behavioral Control via APIM**](docs/deepdive.md#behavioral-control-via-apim-runtime-agent-configuration) — Runtime read-only / no-delegation / context-flag injection without touching the agent definition
-- [**Context Compaction**](docs/deepdive.md#context-compaction-for-long-conversations) — `max_prompt_tokens`, sub-agent isolation, periodic summarisation strategies
-- [**Meta-Tool Ephemeral Results**](docs/deepdive.md#meta-tool-pattern-ephemeral-lookup-results) — Compaction middleware, mode discipline, RAG comparison
 - [**Current Scope and Limitations**](docs/deepdive.md#current-scope-and-limitations) — Production considerations
 - [**Diagram Sources**](docs/deepdive.md#diagram-sources) — Mermaid sources for both sequence diagrams
 

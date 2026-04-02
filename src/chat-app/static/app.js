@@ -233,6 +233,13 @@ async function loadAgents() {
     }
 }
 
+function _friendlyProjectName(raw) {
+    if (!raw) return 'Agents';
+    // Hide raw Azure resource IDs (e.g. PROJ-C544ZEGK5TVC2)
+    if (/^PROJ-/i.test(raw) || /^[0-9a-f-]{20,}$/i.test(raw)) return 'AI Foundry Agents';
+    return raw;
+}
+
 function renderAgentSelector() {
     const welcome = document.getElementById('welcome');
     if (!welcome) return;
@@ -249,23 +256,35 @@ function renderAgentSelector() {
     selector.id = 'agentSelector';
     selector.className = 'agent-selector';
 
+    // Count total agents for search bar decision
+    let totalAgents = 0;
+    for (const p of agentsConfig) totalAgents += (p.agents || []).length;
+
     let html = '<h2>Choose an Agent</h2><p>Select which assistant you want to chat with.</p>';
+
+    // Search bar when many agents
+    if (totalAgents > 6) {
+        html += '<input type="text" id="agentSearch" class="agent-search" placeholder="Search agents..." oninput="filterAgentCards(this.value)" />';
+    }
+
     html += '<div class="agent-cards">';
 
     for (const proj of agentsConfig) {
         const showProjectLabel = agentsConfig.length > 1;
+        const friendlyName = _friendlyProjectName(proj.project);
         if (showProjectLabel) {
-            html += '<div class="agent-project-label">' + escapeHtml(proj.project || 'Default') + '</div>';
+            html += '<div class="agent-project-label">' + escapeHtml(friendlyName) + '</div>';
         }
         for (const agent of (proj.agents || [])) {
             const meta = getAgentMeta(agent.name);
             const icon = agent.icon || meta.icon || 'bot';
-            html += '<button class="agent-card" onclick="selectAgent(\'' +
+            const label = agent.label || agent.name;
+            html += '<button class="agent-card" data-agent-name="' + escapeAttr(label.toLowerCase()) + '" onclick="selectAgent(\'' +
                 escapeAttr(agent.name) + '\', \'' +
-                escapeAttr(agent.label || agent.name) + '\', \'' +
+                escapeAttr(label) + '\', \'' +
                 escapeAttr(proj.project_endpoint || '') + '\')">' +
                 '<div class="agent-card-icon">' + getAgentIcon(icon) + '</div>' +
-                '<div class="agent-card-name">' + escapeHtml(agent.label || agent.name) + '</div>' +
+                '<div class="agent-card-name">' + escapeHtml(label) + '</div>' +
             '</button>';
         }
     }
@@ -276,6 +295,30 @@ function renderAgentSelector() {
     // Replace welcome content with selector
     welcome.innerHTML = '';
     welcome.appendChild(selector);
+}
+
+function filterAgentCards(query) {
+    const q = query.toLowerCase().trim();
+    const cards = document.querySelectorAll('.agent-card');
+    const labels = document.querySelectorAll('.agent-project-label');
+
+    cards.forEach(card => {
+        const name = card.getAttribute('data-agent-name') || '';
+        card.style.display = (!q || name.includes(q)) ? '' : 'none';
+    });
+
+    // Hide project labels if all their cards are hidden
+    labels.forEach(label => {
+        let next = label.nextElementSibling;
+        let anyVisible = false;
+        while (next && !next.classList.contains('agent-project-label')) {
+            if (next.classList.contains('agent-card') && next.style.display !== 'none') {
+                anyVisible = true;
+            }
+            next = next.nextElementSibling;
+        }
+        label.style.display = anyVisible ? '' : 'none';
+    });
 }
 
 // Agent metadata — enriches dynamic discovery with icons, descriptions, suggestions
@@ -308,6 +351,18 @@ const AGENT_METADATA = {
             'Affiche les demandes de changement en attente d\'approbation',
             'Cree un incident de priorite haute pour un probleme reseau',
             'Quel est le statut de mes demandes de service ?',
+        ],
+    },
+    'customer360-assistant': {
+        icon: 'globe',
+        description: 'Vue unifiee de vos clients entre Salesforce (CRM) et ServiceNow (ITSM).',
+        prompts: [
+            'Donne-moi une vue Customer 360 pour Contoso Ltd',
+            'Acme Corp signale des pannes API gateway — quel est le tableau complet ?',
+            'Prepare mon appel avec Fabrikam Inc demain',
+            'Quels comptes strategiques ont le plus d\'incidents ouverts ? Montre le revenu a risque',
+            'Montre les incidents P1 non resolus et les cases Salesforce correles',
+            'Incidents P1/P2 ServiceNow avec les comptes Salesforce impactes — classe par revenu a risque',
         ],
     },
 };
@@ -382,6 +437,7 @@ function getAgentIcon(icon) {
         'bot': '&#9881;',
         'star': '&#9733;',
         'data': '&#128202;',
+        'globe': '&#127760;',
     };
     return icons[icon] || icons['bot'];
 }

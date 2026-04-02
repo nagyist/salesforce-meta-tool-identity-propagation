@@ -890,10 +890,46 @@ company=Acme Corp^ORcompany=Contoso Ltd^ORcompany=Northwind Traders.
                     tools=tools,
                 ),
             )
-            print(f"Agent created: name={agent.name}, version={agent.version}, id={agent.id}")
+
+            # Add conversation starters via REST API (SDK doesn't expose this yet).
+            # Reads the definition from the version we just created, adds starters,
+            # and creates a new version with the full definition + starters.
+            final_version = agent.version
+            try:
+                import httpx as _httpx
+                _token = credential.get_token("https://ai.azure.com/.default").token
+                _headers = {"Authorization": f"Bearer {_token}", "Content-Type": "application/json"}
+                _params = {"api-version": "2025-05-15-preview"}
+                _r = _httpx.get(
+                    f"{project_endpoint}/agents/{agent_name}/versions/{agent.version}",
+                    headers=_headers, params=_params, timeout=30,
+                )
+                if _r.status_code == 200:
+                    _defn = _r.json()["definition"]
+                    _defn["conversation_starters"] = [
+                        {"text": "Give me a Customer 360 view for Contoso Ltd"},
+                        {"text": "Acme Corp reports API gateway outages — what's the full picture?"},
+                        {"text": "Prepare me for my call with Fabrikam Inc tomorrow"},
+                        {"text": "Which strategic accounts have the most open incidents? Show revenue at risk"},
+                        {"text": "Show me unresolved P1 incidents and correlated Salesforce cases"},
+                        {"text": "P1/P2 incidents with affected Salesforce accounts — rank by revenue at risk"},
+                    ]
+                    _r2 = _httpx.post(
+                        f"{project_endpoint}/agents/{agent_name}/versions",
+                        headers=_headers, params=_params,
+                        json={"definition": _defn}, timeout=30,
+                    )
+                    if _r2.status_code == 200:
+                        final_version = _r2.json().get("version", agent.version)
+                        print(f"  Conversation starters added (v{final_version})")
+                    else:
+                        print(f"  WARNING: Failed to add starters: {_r2.status_code}")
+            except Exception as _e:
+                print(f"  WARNING: conversation starters skipped: {_e}")
+            print(f"Agent created: name={agent.name}, version={final_version}, id={agent.id}")
             print(f"  Tools: {len(tools)} tool(s) configured (SF MCP + SN MCP + Memory)")
-            print(f"Agent: {agent.name} v{agent.version}")
-            return agent.version
+            print(f"Agent: {agent.name} v{final_version}")
+            return final_version
         except Exception as e:
             if "not found" in str(e).lower() and attempt < max_retries - 1:
                 print(f"  Attempt {attempt + 1}/{max_retries}: {e}")

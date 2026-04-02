@@ -1157,64 +1157,87 @@ body.debug-open .app-body {
 
 .agent-selector {
   text-align: center;
-  padding: 20px;
+  padding: 16px 20px;
+  max-width: 800px;
+  margin: 0 auto;
 }
 .agent-selector h2 {
-  margin: 0 0 8px;
-  font-size: 22px;
-  color: #e0e0e0;
+  margin: 0 0 4px;
+  font-size: 20px;
+  color: #333;
 }
 .agent-selector p {
-  margin: 0 0 24px;
-  color: #999;
+  margin: 0 0 16px;
+  color: #888;
+  font-size: 13px;
+}
+
+.agent-search {
+  width: 100%;
+  max-width: 360px;
+  padding: 8px 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
   font-size: 14px;
+  margin-bottom: 16px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.agent-search:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
 .agent-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 
 .agent-project-label {
-  width: 100%;
+  grid-column: 1 / -1;
   text-align: left;
   font-size: 11px;
   font-weight: 600;
-  color: #888;
+  color: #999;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-top: 8px;
+  margin-top: 12px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #eee;
 }
 
 .agent-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 24px 32px;
-  background: #1e1e1e;
-  border: 1px solid #333;
-  border-radius: 12px;
+  gap: 4px;
+  padding: 10px 6px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
-  min-width: 140px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .agent-card:hover {
   border-color: #2563eb;
-  background: #1a1a2e;
+  background: #f0f4ff;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
 }
 
 .agent-card-icon {
-  font-size: 32px;
+  font-size: 18px;
   line-height: 1;
+  color: #555;
 }
 
 .agent-card-name {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: #333;
+  line-height: 1.2;
+  text-align: center;
+  word-break: break-word;
 }

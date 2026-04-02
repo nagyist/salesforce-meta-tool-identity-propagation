@@ -492,6 +492,11 @@ the other.
 **Root cause:** Rate limits are tokens-per-minute (TPM), not requests-per-minute. Three turns with 8+ tool calls each exhausted the 250K TPM quota.
 **Rule:** E2E tests with multi-tool agents need 429 retry with exponential backoff (30s base) and inter-turn pacing (15s minimum). For production, consider conversation summarization after 3-4 turns.
 
+### 2026-04-03 — Foundry conversation starters require BOTH definition and metadata fields
+**Mistake:** Set `definition.conversation_starters` via REST API but starters didn't appear in Foundry UI.
+**Root cause:** Foundry UI reads starter prompts from `metadata.starterPrompts` (newline-separated string), not from `definition.conversation_starters`. The SDK `PromptAgentDefinition` doesn't expose either field. Must use data plane REST API directly.
+**Rule:** To set conversation starters programmatically: (1) create agent via SDK, (2) GET the version via REST, (3) add `definition.conversation_starters` (array of `{"text":"..."}`) AND `metadata.starterPrompts` (newline-joined string), (4) POST new version. Graduated to `~/.ai/knowledge/foundry-sdk.md`.
+
 ### 2026-04-02 — Windows encoding breaks on Unicode in agent responses
 **Mistake:** E2E test crashed with `'charmap' codec can't encode character '\u2194'` when agent used arrow character in response.
 **Root cause:** Python stdout defaults to `cp1252` on Windows, which can't encode all Unicode characters from GPT-5.4 responses.

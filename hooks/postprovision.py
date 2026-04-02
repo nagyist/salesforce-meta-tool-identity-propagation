@@ -892,8 +892,18 @@ company=Acme Corp^ORcompany=Contoso Ltd^ORcompany=Northwind Traders.
             )
 
             # Add conversation starters via REST API (SDK doesn't expose this yet).
-            # Reads the definition from the version we just created, adds starters,
-            # and creates a new version with the full definition + starters.
+            # Foundry UI stores starters in TWO places:
+            #   1. definition.conversation_starters — array of {"text": "..."}
+            #   2. metadata.starterPrompts — newline-separated string (UI reads this)
+            # We read the SDK-created version, add both fields, and POST a new version.
+            _starters = [
+                "Give me a Customer 360 view for Contoso Ltd",
+                "Acme Corp reports API gateway outages \u2014 what's the full picture?",
+                "Prepare me for my call with Fabrikam Inc tomorrow",
+                "Which strategic accounts have the most open incidents? Show revenue at risk",
+                "Show me unresolved P1 incidents and correlated Salesforce cases",
+                "P1/P2 incidents with affected Salesforce accounts \u2014 rank by revenue at risk",
+            ]
             final_version = agent.version
             try:
                 import httpx as _httpx
@@ -905,19 +915,16 @@ company=Acme Corp^ORcompany=Contoso Ltd^ORcompany=Northwind Traders.
                     headers=_headers, params=_params, timeout=30,
                 )
                 if _r.status_code == 200:
-                    _defn = _r.json()["definition"]
-                    _defn["conversation_starters"] = [
-                        {"text": "Give me a Customer 360 view for Contoso Ltd"},
-                        {"text": "Acme Corp reports API gateway outages — what's the full picture?"},
-                        {"text": "Prepare me for my call with Fabrikam Inc tomorrow"},
-                        {"text": "Which strategic accounts have the most open incidents? Show revenue at risk"},
-                        {"text": "Show me unresolved P1 incidents and correlated Salesforce cases"},
-                        {"text": "P1/P2 incidents with affected Salesforce accounts — rank by revenue at risk"},
-                    ]
+                    _body = _r.json()
+                    _defn = _body["definition"]
+                    _defn["conversation_starters"] = [{"text": s} for s in _starters]
+                    _meta = _body.get("metadata", {})
+                    _meta["starterPrompts"] = "\n".join(_starters)
                     _r2 = _httpx.post(
                         f"{project_endpoint}/agents/{agent_name}/versions",
                         headers=_headers, params=_params,
-                        json={"definition": _defn}, timeout=30,
+                        json={"definition": _defn, "metadata": _meta},
+                        timeout=30,
                     )
                     if _r2.status_code == 200:
                         final_version = _r2.json().get("version", agent.version)

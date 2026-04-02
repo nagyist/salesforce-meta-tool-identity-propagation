@@ -37,7 +37,7 @@ class SalesforceClient:
         # Describe cache: object_name -> (timestamp, data)
         self._describe_cache: dict[str, tuple[float, dict]] = {}
         self._global_describe_cache: tuple[float, list] | None = None
-        self._cache_ttl = 900  # 15 minutes
+        self._cache_ttl = 3600  # 60 minutes (schema rarely changes; INVALID_FIELD error path handles stale cache)
 
         self._client = httpx.AsyncClient(timeout=30.0)
 

@@ -228,7 +228,7 @@ async def describe_object(object_name: str, mode: str = "slim") -> str:
 
 
 @mcp.tool()
-async def soql_query(query: str, max_records: int = 2000) -> str:
+async def soql_query(query: str, max_records: int = 100) -> str:
     """Execute a SOQL query with automatic pagination.
 
     Use for precise, structured lookups. Use search_records for full-text/fuzzy search.
@@ -242,7 +242,7 @@ async def soql_query(query: str, max_records: int = 2000) -> str:
 
     Args:
         query: Complete SOQL string.
-        max_records: Max records to return (default 2000, cap 50000). Auto-paginates.
+        max_records: Max records to return (default 100, cap 500). Auto-paginates.
 
     Returns:
         JSON with totalSize, records array, done flag. done=false means results were truncated.
@@ -252,7 +252,7 @@ async def soql_query(query: str, max_records: int = 2000) -> str:
     """
     log.info("tool=soql_query max_records=%d", max_records)
     t0 = time.monotonic()
-    max_records = min(max_records, 50000)
+    max_records = min(max_records, 500)
     try:
         result = await sf.query(query)
         records = result.get("records", [])

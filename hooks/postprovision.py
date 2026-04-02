@@ -9,6 +9,9 @@ After Bicep deploys Azure resources, this hook:
 4. Recreates OBO connection via ARM REST + updates APIM Named Values
 5. Creates/updates Agent Application (REST-only — enables Activity Protocol endpoint)
 6. Creates/updates Agent Deployment (links agent version to application)
+6b. Creates Customer 360 agent (dual MCP: SF + SN, requires servicenow-obo connection)
+6c. Creates Customer 360 Agent Application
+6d. Creates Customer 360 Agent Deployment
 7. Bootstraps Bot Service + channels via ARM REST (first-run only — Bicep takes over after)
 8. Publishes Teams app to org catalog via Graph API (org-wide distribution)
 
@@ -702,6 +705,205 @@ Check childRelationships on the parent object for an alternative path (subquery)
                 raise
 
 
+def create_customer360_agent():
+    """Create a Foundry agent with both Salesforce and ServiceNow MCP tools.
+
+    Connects to both salesforce-obo and servicenow-obo connections for unified
+    CRM+ITSM queries. Pre-checks that servicenow-obo connection exists.
+    Returns the agent version number.
+    """
+    project_endpoint = os.environ.get("AI_FOUNDRY_PROJECT_ENDPOINT")
+    if not project_endpoint:
+        print("WARNING: Missing AI_FOUNDRY_PROJECT_ENDPOINT — skipping Customer 360 agent.")
+        return None
+
+    # SF MCP endpoint
+    sf_mcp_endpoint = os.environ.get("APIM_SF_MCP_OBO_ENDPOINT", "")
+    if not sf_mcp_endpoint:
+        apim_gateway = os.environ.get("APIM_GATEWAY_URL", "")
+        if apim_gateway:
+            sf_mcp_endpoint = f"{apim_gateway}/salesforce-mcp-obo/mcp"
+    sf_connection = os.environ.get("SF_OBO_CONNECTION_NAME", "salesforce-obo")
+
+    if not sf_mcp_endpoint:
+        print("WARNING: No SF MCP endpoint available — skipping Customer 360 agent.")
+        return None
+
+    # SN MCP endpoint — derive from APIM gateway
+    apim_gateway = os.environ.get("APIM_GATEWAY_URL", "")
+    sn_mcp_endpoint = f"{apim_gateway}/servicenow-mcp-obo/mcp" if apim_gateway else ""
+    sn_connection = "servicenow-obo"
+
+    if not sn_mcp_endpoint:
+        print("WARNING: No SN MCP endpoint available — skipping Customer 360 agent.")
+        return None
+
+    # Pre-check: verify servicenow-obo connection exists in Foundry
+    sub_id = run("az account show --query id -o tsv")
+    rg = os.environ.get("AZURE_RESOURCE_GROUP", "")
+    account = os.environ.get("COGNITIVE_ACCOUNT_NAME", "")
+    project_name = os.environ.get("AI_FOUNDRY_PROJECT_NAME", "")
+    conn_url = (
+        f"https://management.azure.com/subscriptions/{sub_id}"
+        f"/resourceGroups/{rg}"
+        f"/providers/Microsoft.CognitiveServices/accounts/{account}"
+        f"/projects/{project_name}/connections/{sn_connection}"
+        f"?api-version=2025-04-01-preview"
+    )
+    conn_check = run(
+        f'az rest --method GET --url "{conn_url}"',
+        parse_json=True,
+    )
+    if not conn_check or not isinstance(conn_check, dict):
+        print(f"WARNING: '{sn_connection}' connection not found in Foundry project.")
+        print("  Deploy snow-meta-tool first (azd up), then re-run.")
+        print("  Skipping Customer 360 agent creation.")
+        return None
+
+    print(f"\nProject endpoint: {project_endpoint}")
+    print(f"SF MCP endpoint:  {sf_mcp_endpoint}")
+    print(f"SF Connection:    {sf_connection}")
+    print(f"SN MCP endpoint:  {sn_mcp_endpoint}")
+    print(f"SN Connection:    {sn_connection}")
+
+    from azure.identity import DefaultAzureCredential
+    from azure.ai.projects import AIProjectClient
+    from azure.ai.projects.models import (
+        PromptAgentDefinition, MCPTool, MemorySearchTool,
+    )
+
+    credential = DefaultAzureCredential()
+    project_client = AIProjectClient(
+        endpoint=project_endpoint,
+        credential=credential,
+    )
+
+    agent_name = "customer360-assistant"
+    print(f"\nCreating agent '{agent_name}'...")
+
+    # Build Salesforce MCPTool
+    sf_mcp_tool = MCPTool(
+        server_label="salesforce_mcp",
+        server_url=sf_mcp_endpoint,
+        project_connection_id=sf_connection,
+        require_approval="never",
+        allowed_tools=[
+            "whoami",
+            "list_objects",
+            "describe_object",
+            "soql_query",
+            "search_records",
+            "write_record",
+            "process_approval",
+        ],
+    )
+
+    # Build ServiceNow MCPTool
+    sn_mcp_tool = MCPTool(
+        server_label="servicenow_mcp",
+        server_url=sn_mcp_endpoint,
+        project_connection_id=sn_connection,
+        require_approval="never",
+        allowed_tools=["discover", "query", "write"],
+    )
+
+    tools = [sf_mcp_tool, sn_mcp_tool]
+
+    # Create memory store and add MemorySearchTool (skip if DISABLE_AGENT_MEMORY=true)
+    if os.environ.get("DISABLE_AGENT_MEMORY", "").lower() == "true":
+        print("  MemorySearchTool SKIPPED (DISABLE_AGENT_MEMORY=true)")
+    else:
+        store_name = create_memory_store(project_client)
+        if store_name:
+            memory_tool = MemorySearchTool(
+                memory_store_name=store_name,
+                scope="{{$userId}}",
+                update_delay=300,
+            )
+            tools.append(memory_tool)
+            print(f"  MemorySearchTool added (store={store_name}, scope=per-user)")
+
+    instructions = """\
+You are a Customer 360 assistant with access to Salesforce (CRM) and ServiceNow (ITSM) \
+via MCP tools. Provide a unified view of customers across both systems.
+
+## Memory
+Per-user memory is auto-populated — no explicit save needed.
+Do NOT query memory if the answer is already in the current conversation.
+NEVER answer data questions from memory alone — always call tools for fresh data. \
+Memory is for user preferences and metadata, not for record data.
+
+## Workflow
+1. Plan — tell the user what you will query in each system before calling tools.
+2. Query both systems using tools — always fetch fresh data, never rely on memory or \
+prior turns for record-level answers.
+3. Correlate by company name and synthesize a unified view.
+
+## Correlation
+- Company name: SF Account.Name = SN company field on incidents/problems/changes.
+- Keywords: SF Case.Subject/Description keywords match SN Incident short_description.
+
+## Business Insights
+- Revenue at risk: cross-reference P1/P2 incidents with SF accounts' open opportunities — \
+show pipeline value at risk. Lead with monetary amounts.
+- Case-incident correlation: SF Cases and SN Incidents for the same company with similar \
+keywords are likely the same issue from different angles.
+
+## Salesforce Rules
+- whoami: use cached UserId for "my" queries; call only if not in memory or context.
+- describe_object: REQUIRED before writes (mode="full"). Skip for reads if fields known; \
+use mode="slim" to discover fields and relationships.
+- Common fields need no describe: Id, Name, CreatedDate, OwnerId, LastModifiedDate.
+- INVALID_FIELD/MALFORMED_QUERY errors include availableFields — fix and retry, no re-describe.
+- API names are PascalCase. Always include LIMIT in SOQL. Use relationshipName for subqueries.
+
+## ServiceNow Rules
+- discover(table=...): REQUIRED before writes; optional for reads if fields known. \
+Use mode="names" for validation only; mode="compact" (default) for full metadata.
+- Skip discover(filter=...) if you already know the table name.
+- ALWAYS pass fields= to query — only the columns needed.
+- Encoded query: field=value, fieldLIKEvalue, ^(AND), ^OR, ^ORDERBYDESCfield.
+- sys_id (32-char hex) for updates/deletes.
+- 403 on discover: fall back to standard fields (short_description, priority, state, \
+urgency, impact, assignment_group, assigned_to, description, category).
+- Company lookup: use a SINGLE query with OR to cover exact and variant matches. \
+Example: company=Contoso Ltd^ORcompanyLIKEContoso. Do NOT issue separate exact and LIKE queries.
+- When querying multiple companies, combine them in one query with OR: \
+company=Acme Corp^ORcompany=Contoso Ltd^ORcompany=Northwind Traders.
+
+## Rules
+- Confirm before any write in either system.
+- When correlating, explain what matched and why.
+- Lead with monetary amounts — they drive decisions.
+"""
+
+    # Retry with backoff
+    max_retries = 6
+    retry_delay = 10
+    for attempt in range(max_retries):
+        try:
+            agent = project_client.agents.create_version(
+                agent_name=agent_name,
+                definition=PromptAgentDefinition(
+                    model="gpt-5.4",
+                    instructions=instructions,
+                    tools=tools,
+                ),
+            )
+            print(f"Agent created: name={agent.name}, version={agent.version}, id={agent.id}")
+            print(f"  Tools: {len(tools)} tool(s) configured (SF MCP + SN MCP + Memory)")
+            print(f"Agent: {agent.name} v{agent.version}")
+            return agent.version
+        except Exception as e:
+            if "not found" in str(e).lower() and attempt < max_retries - 1:
+                print(f"  Attempt {attempt + 1}/{max_retries}: {e}")
+                print(f"  Retrying in {retry_delay}s (waiting for project propagation)...")
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 60)
+            else:
+                raise
+
+
 def _arm_rest(method, url, body=None, parse_json_response=True):
     """Call Azure ARM REST API via az rest. Returns parsed JSON or None."""
     cmd = f'az rest --method {method} --url "{url}"'
@@ -824,6 +1026,74 @@ def create_agent_application():
     return client_id
 
 
+def create_customer360_application():
+    """Create/update the Customer 360 Agent Application via ARM control plane.
+
+    No Bot Service or Teams app needed — chat-app discovers it automatically.
+    """
+    app_name = "customer360-assistant"
+    agent_name = "customer360-assistant"
+    api_version = "2026-01-15-preview"
+
+    base = _arm_project_base()
+    if not base or "None" in base:
+        print("  WARNING: Missing ARM project vars — skipping")
+        return None
+
+    url = f"{base}/applications/{app_name}?api-version={api_version}"
+
+    # Check if already exists
+    existing = _arm_rest("GET", url)
+    if existing and isinstance(existing, dict):
+        client_id = (
+            existing.get("properties", {})
+            .get("defaultInstanceIdentity", {})
+            .get("clientId")
+        )
+        if client_id:
+            print(f"  Agent Application already exists (clientId: {client_id})")
+            return client_id
+
+    # Create/update
+    body = {
+        "properties": {
+            "displayName": "Customer 360 Assistant",
+            "agents": [{"agentName": agent_name}],
+            "authorizationPolicy": {
+                "authorizationScheme": "Channels",
+            },
+        }
+    }
+
+    print(f"  Creating Agent Application '{app_name}'...")
+    result = _arm_rest("PUT", url, body)
+    if not result:
+        print("  ERROR: Failed to create Agent Application")
+        return None
+
+    # Check if already provisioned
+    state = result.get("properties", {}).get("provisioningState", "")
+    if state != "Succeeded":
+        print("  Waiting for provisioning...")
+        result = _poll_provisioning(url)
+        if not result:
+            print("  ERROR: Agent Application provisioning timed out")
+            return None
+
+    client_id = (
+        result.get("properties", {})
+        .get("defaultInstanceIdentity", {})
+        .get("clientId")
+    )
+    if not client_id:
+        print("  ERROR: No clientId in Agent Application response")
+        print(f"  Response: {json.dumps(result, indent=2)[:500]}")
+        return None
+
+    print(f"  Agent Application created (clientId: {client_id})")
+    return client_id
+
+
 def create_agent_deployment(agent_version):
     """Create/update the Agent Deployment via ARM control plane.
 
@@ -914,6 +1184,61 @@ def _update_traffic_routing(app_name, deployment_id, api_version):
         print(f"  Traffic routing updated (routed to: {routed})")
     else:
         print("  WARNING: Failed to update traffic routing")
+
+
+def create_customer360_deployment(agent_version):
+    """Create/update the Customer 360 Agent Deployment via ARM control plane.
+
+    Uses fixed deployment name 'customer360-assistant' as a 'latest' pointer.
+    """
+    app_name = "customer360-assistant"
+    deployment_name = "customer360-assistant"
+    agent_name = "customer360-assistant"
+    api_version = "2026-01-15-preview"
+
+    base = _arm_project_base()
+    if not base or "None" in base:
+        print("  WARNING: Missing ARM project vars — skipping")
+        return
+
+    url = f"{base}/applications/{app_name}/agentDeployments/{deployment_name}?api-version={api_version}"
+
+    body = {
+        "properties": {
+            "displayName": "Customer 360 Assistant",
+            "deploymentType": "Managed",
+            "protocols": [
+                {"protocol": "Responses", "version": "1.0"},
+            ],
+            "agents": [
+                {
+                    "agentName": agent_name,
+                    "agentVersion": str(agent_version),
+                },
+            ],
+        }
+    }
+
+    print(f"  Creating/updating Agent Deployment '{deployment_name}' (agent v{agent_version})...")
+    result = _arm_rest("PUT", url, body)
+    if not result:
+        print("  ERROR: Failed to create Agent Deployment")
+        return None
+
+    # Check if already provisioned
+    state = result.get("properties", {}).get("provisioningState", "")
+    if state != "Succeeded":
+        result = _poll_provisioning(url)
+        if result:
+            state = result.get("properties", {}).get("provisioningState", "")
+
+    deployment_id = result.get("properties", {}).get("deploymentId", "") if result else ""
+    print(f"  Agent Deployment: {state or 'unknown'} (deploymentId: {deployment_id})")
+
+    if deployment_id:
+        _update_traffic_routing(app_name, deployment_id, api_version)
+
+    return deployment_id
 
 
 def create_bot_service_and_channels(msa_app_id):
@@ -1261,6 +1586,37 @@ def main():
             traceback.print_exc()
     else:
         print("\n--- Step 6: Agent Deployment (skipped — no agent version) ---")
+
+    # Step 6b: Create Customer 360 agent (dual MCP — SF + SN)
+    print("\n--- Step 6b: Create Customer 360 agent ---")
+    c360_version = None
+    try:
+        c360_version = create_customer360_agent()
+    except Exception as e:
+        print(f"\nWARNING: Customer 360 agent creation failed (non-fatal): {e}")
+        traceback.print_exc()
+
+    # Step 6c: Customer 360 Agent Application
+    if c360_version:
+        print("\n--- Step 6c: Customer 360 Agent Application ---")
+        try:
+            create_customer360_application()
+        except Exception as e:
+            print(f"\nWARNING: Customer 360 Agent Application failed (non-fatal): {e}")
+            traceback.print_exc()
+    else:
+        print("\n--- Step 6c: Customer 360 Agent Application (skipped — no agent version) ---")
+
+    # Step 6d: Customer 360 Agent Deployment
+    if c360_version:
+        print("\n--- Step 6d: Customer 360 Agent Deployment ---")
+        try:
+            create_customer360_deployment(c360_version)
+        except Exception as e:
+            print(f"\nWARNING: Customer 360 Agent Deployment failed (non-fatal): {e}")
+            traceback.print_exc()
+    else:
+        print("\n--- Step 6d: Customer 360 Agent Deployment (skipped — no agent version) ---")
 
     # Step 7: Bot Service bootstrap (first-run only, then Bicep takes over)
     if msa_app_id:

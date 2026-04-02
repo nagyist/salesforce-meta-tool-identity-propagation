@@ -477,6 +477,26 @@ infrastructure. Also: SAML SSO (Salesforce login federation) and agent-oauth (Fo
 token acquisition for Teams) are completely independent flows — changes to one cannot break
 the other.
 
+### 2026-04-02 — ServiceNow company field is a reference, not a text field
+**Mistake:** Seeded SN incidents with `company: "Acme Corp"` using `sysparm_input_display_value=true`, but the company field resolved to NULL because "Acme Corp" didn't exist in `core_company` table.
+**Root cause:** SN `company` field on incident/problem/change_request is a reference to `core_company`. `sysparm_input_display_value=true` accepts display names but does NOT auto-create missing companies — it silently stores NULL.
+**Rule:** Always pre-create companies in `core_company` table before seeding SN records that reference them. Use `sn_ensure_companies()` pattern.
+
+### 2026-04-02 — Trimming agent instructions too aggressively causes memory over-reliance
+**Mistake:** Removed Tool Routing, Cross-System Workflow, and verbose Memory sections from C360 instructions (44% reduction). Agent stopped calling MCP tools entirely and answered all queries from memory/prior conversations.
+**Root cause:** Without explicit "always fetch fresh data" guidance, the agent used MemorySearchTool data from prior test runs instead of querying SF/SN tools.
+**Rule:** When optimizing agent instructions, always keep an explicit guardrail: "NEVER answer data questions from memory alone — always call tools for fresh data." Memory is for user preferences and metadata, not record-level data.
+
+### 2026-04-02 — Foundry Responses API 429 rate limits are TPM-based
+**Mistake:** E2E test with 6 heavy cross-system turns hit 429 at turn 4 despite 15s inter-turn delays.
+**Root cause:** Rate limits are tokens-per-minute (TPM), not requests-per-minute. Three turns with 8+ tool calls each exhausted the 250K TPM quota.
+**Rule:** E2E tests with multi-tool agents need 429 retry with exponential backoff (30s base) and inter-turn pacing (15s minimum). For production, consider conversation summarization after 3-4 turns.
+
+### 2026-04-02 — Windows encoding breaks on Unicode in agent responses
+**Mistake:** E2E test crashed with `'charmap' codec can't encode character '\u2194'` when agent used arrow character in response.
+**Root cause:** Python stdout defaults to `cp1252` on Windows, which can't encode all Unicode characters from GPT-5.4 responses.
+**Rule:** Force UTF-8 stdout at script start: `sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")`
+
 <!-- Example format:
 ### YYYY-MM-DD — Short title
 **Mistake:** What went wrong

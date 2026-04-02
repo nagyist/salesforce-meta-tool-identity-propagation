@@ -70,6 +70,70 @@ The `salesforce-obo` connection stores **no credentials**. It's a configuration 
 - `audience: https://ai.azure.com` — request token for this audience (must match APIM `validate-jwt`)
 - `target: https://apim-.../salesforce-mcp-obo/mcp` — send requests here
 
+## Customer 360 Agent
+
+The **customer360-assistant** connects to both Salesforce (CRM) and ServiceNow (ITSM) via MCP tools, enabling unified cross-system queries.
+
+### Capabilities
+
+- **Unified lookup**: Full customer profile from both systems by company name
+- **Cross-system correlation**: Match SF Cases with SN Incidents by company, keywords, timing
+- **Revenue at risk**: Cross-reference P1/P2 incidents with open opportunities and pipeline value
+- **Meeting prep**: Combined account summary, open deals, and active incidents
+- **Change risk**: Assess SN Change Requests against SF accounts with upcoming renewals
+
+### Architecture
+
+```
+Customer 360 Agent (AI Foundry)
+  ├── salesforce_mcp (7 tools) → salesforce-obo connection → APIM → SF MCP Server
+  ├── servicenow_mcp (3 tools) → servicenow-obo connection → APIM → SN MCP Server
+  └── MemorySearchTool (project-memory store, per-user scope)
+```
+
+Both MCP tools use OBO identity propagation — the user's Azure AD token flows through to each backend system via APIM JWT Bearer exchange.
+
+### Token Optimization
+
+System instructions are trimmed to ~437 tokens (44% reduction from initial 782). Key design choices:
+- Explicit "always fetch fresh data" rule prevents memory-only answers
+- Removed Tool Routing section (tool names are self-descriptive)
+- Trimmed Correlation Patterns to 2 proven patterns (company name + keywords)
+- SF `soql_query` default `max_records` reduced from 2000 to 100 (cap 500)
+- E2E test includes 429 retry with 30s backoff and 15s inter-turn pacing
+- Typical 6-turn session: ~124K tokens (25% below baseline)
+
+### Prerequisites
+
+1. This project deployed (`azd up`) — provides SF MCP server, APIM, Foundry project
+2. `snow-meta-tool` project deployed (`azd up`) — provides SN MCP server and `servicenow-obo` connection
+3. Both Container Apps running (SF + SN MCP servers)
+
+### Demo Data
+
+Correlated data across both systems is required for cross-system scenarios:
+
+```bash
+python scripts/seed_demo_data.py \
+  --sf-org <alias> \
+  --sn-instance https://devXXXXX.service-now.com \
+  --sn-admin-password <pw>
+```
+
+The script pre-creates companies in SN's `core_company` table before seeding incidents (required because `company` is a reference field).
+
+See `docs/DEMO_DATA_SETUP.md` for details, `docs/TEST_PROMPTS_360.md` for test scenarios.
+
+### E2E Test
+
+```bash
+python scripts/test_e2e_customer360.py
+```
+
+Runs 6 progressive scenarios, validates both MCP tools are called per turn, reports token usage. Handles 429 rate limits with retry backoff. See `.ai/e2e-results-history.md` for optimization progression.
+
+---
+
 ## Development Quick Reference
 
 ### Deploy

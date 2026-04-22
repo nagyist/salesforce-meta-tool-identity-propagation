@@ -389,35 +389,40 @@ async def write_record(
         })
 
     try:
-        # Validate field names for operations that send data
+        # Validate field names if describe is already cached (avoids cold-cache
+        # latency that can trigger Foundry's TimeoutPolicy on write operations).
+        # If the cache is cold, skip validation — Salesforce will return a clear
+        # error for invalid fields, so correctness is preserved.
         desc = None
         if op in ("create", "update", "upsert") and field_values:
-            desc = await sf.describe_object(object_name, slim=True)
-            valid_fields = {f["name"] for f in desc["fields"]}
-            invalid = set(field_values.keys()) - valid_fields
-            if invalid:
-                return json.dumps({
-                    "success": False,
-                    "error": f"Invalid field names: {', '.join(sorted(invalid))}. Use describe_object to find valid field names.",
-                })
+            if object_name in sf._describe_cache:
+                desc = await sf.describe_object(object_name, slim=True)
+                valid_fields = {f["name"] for f in desc["fields"]}
+                invalid = set(field_values.keys()) - valid_fields
+                if invalid:
+                    return json.dumps({
+                        "success": False,
+                        "error": f"Invalid field names: {', '.join(sorted(invalid))}. Use describe_object to find valid field names.",
+                    })
 
         # Validate external ID field for upsert (needs full describe for externalId flag)
         if op == "upsert":
-            desc = await sf.describe_object(object_name)
-            ext_field_meta = next(
-                (f for f in desc["fields"] if f["name"] == external_id_field), None
-            )
-            if not ext_field_meta:
-                return json.dumps({
-                    "success": False,
-                    "error": f"Field '{external_id_field}' not found on {object_name}.",
-                })
-            if not ext_field_meta.get("externalId") and ext_field_meta.get("type") != "id":
-                return json.dumps({
-                    "success": False,
-                    "error": f"Field '{external_id_field}' is not marked as an External ID on {object_name}. "
-                             "Use describe_object to find fields with externalId: true.",
-                })
+            if object_name in sf._describe_cache:
+                desc = await sf.describe_object(object_name)
+                ext_field_meta = next(
+                    (f for f in desc["fields"] if f["name"] == external_id_field), None
+                )
+                if not ext_field_meta:
+                    return json.dumps({
+                        "success": False,
+                        "error": f"Field '{external_id_field}' not found on {object_name}.",
+                    })
+                if not ext_field_meta.get("externalId") and ext_field_meta.get("type") != "id":
+                    return json.dumps({
+                        "success": False,
+                        "error": f"Field '{external_id_field}' is not marked as an External ID on {object_name}. "
+                                 "Use describe_object to find fields with externalId: true.",
+                    })
 
         if op == "create":
             result = await sf.create_record(object_name, field_values)

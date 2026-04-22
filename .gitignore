@@ -41,3 +41,6 @@ certs/
 
 # Temp deploy directories
 .tmp-*/
+
+# Local-only assets (videos, large media) — not committed
+.local/

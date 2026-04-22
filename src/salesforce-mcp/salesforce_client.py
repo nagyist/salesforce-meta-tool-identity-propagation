@@ -39,7 +39,7 @@ class SalesforceClient:
         self._global_describe_cache: tuple[float, list] | None = None
         self._cache_ttl = 3600  # 60 minutes (schema rarely changes; INVALID_FIELD error path handles stale cache)
 
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client = httpx.AsyncClient(timeout=60.0)
 
     @property
     def _base_url(self) -> str:

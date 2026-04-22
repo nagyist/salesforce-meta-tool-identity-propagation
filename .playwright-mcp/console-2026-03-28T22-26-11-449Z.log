@@ -1,0 +1,1 @@
+[     549ms] [WARNING] An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing. @ https://orgfarm-80dbe7b6e4-dev-ed.develop.my.salesforce.com/s.gif:0

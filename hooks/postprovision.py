@@ -22,6 +22,27 @@ available in managed tenants.
 Uses azure-ai-projects v2 SDK for Foundry agent (no ARM resource type).
 """
 
+# FLEET_PATCH_V1
+# Auto-applied by fleet-preflight.py to make direct Python invocation work
+# outside the azd hook context (for the finalize-customer360 step).
+def _fleet_bootstrap_env():
+    import os, subprocess
+    if os.environ.get("AZURE_ENV_NAME"):
+        return
+    try:
+        out = subprocess.run(["azd", "env", "get-values"], capture_output=True,
+                             text=True, encoding="utf-8", errors="replace",
+                             timeout=30, check=False)
+        for line in (out.stdout or "").splitlines():
+            line = line.strip()
+            if not line or "=" not in line or line.startswith("#"):
+                continue
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+    except Exception:
+        pass
+_fleet_bootstrap_env()
+
 import json
 import os
 import subprocess
@@ -120,7 +141,7 @@ def upload_cert_and_configure_apim():
         print(f"  Certificate already in Key Vault (thumbprint: {thumbprint})")
     else:
         # Assign deployer Key Vault Certificates Officer role
-        deployer_oid = run('az ad signed-in-user show --query id -o tsv')
+        deployer_oid = run('az ad signed-in-user show --only-show-errors || az ad sp show --id "$(az account show --query user.name -o tsv)" --query id -o tsv')
         if not deployer_oid:
             print("  WARNING: Could not get deployer OID — skipping cert upload")
             return
@@ -556,7 +577,7 @@ def create_agent():
     """Create a Foundry agent with the Salesforce MCP tool using the v2 SDK.
 
     Uses the OBO connection (UserEntraToken) and the OBO APIM endpoint.
-    Includes MemorySearchTool for per-user conversational memory.
+    Includes MemorySearchPreviewTool for per-user conversational memory.
     Returns the agent version number (for use by create_agent_deployment).
     """
     project_endpoint = os.environ.get("AI_FOUNDRY_PROJECT_ENDPOINT")
@@ -583,7 +604,7 @@ def create_agent():
     from azure.identity import DefaultAzureCredential
     from azure.ai.projects import AIProjectClient
     from azure.ai.projects.models import (
-        PromptAgentDefinition, MCPTool, MemorySearchTool,
+        PromptAgentDefinition, MCPTool, MemorySearchPreviewTool,
     )
 
     credential = DefaultAzureCredential()
@@ -618,16 +639,16 @@ def create_agent():
     sf_mcp_tool = MCPTool(**sf_tool_kwargs)
     tools = [sf_mcp_tool]
 
-    # Create memory store and add MemorySearchTool
+    # Create memory store and add MemorySearchPreviewTool
     store_name = create_memory_store(project_client)
     if store_name:
-        memory_tool = MemorySearchTool(
+        memory_tool = MemorySearchPreviewTool(
             memory_store_name=store_name,
             scope="{{$userId}}",
             update_delay=300,
         )
         tools.append(memory_tool)
-        print(f"  MemorySearchTool added (store={store_name}, scope=per-user)")
+        print(f"  MemorySearchPreviewTool added (store={store_name}, scope=per-user)")
 
     instructions = """\
 You are an assistant with access to Salesforce via MCP tools.
@@ -769,7 +790,7 @@ def create_customer360_agent():
     from azure.identity import DefaultAzureCredential
     from azure.ai.projects import AIProjectClient
     from azure.ai.projects.models import (
-        PromptAgentDefinition, MCPTool, MemorySearchTool,
+        PromptAgentDefinition, MCPTool, MemorySearchPreviewTool,
     )
 
     credential = DefaultAzureCredential()
@@ -809,19 +830,19 @@ def create_customer360_agent():
 
     tools = [sf_mcp_tool, sn_mcp_tool]
 
-    # Create memory store and add MemorySearchTool (skip if DISABLE_AGENT_MEMORY=true)
+    # Create memory store and add MemorySearchPreviewTool (skip if DISABLE_AGENT_MEMORY=true)
     if os.environ.get("DISABLE_AGENT_MEMORY", "").lower() == "true":
-        print("  MemorySearchTool SKIPPED (DISABLE_AGENT_MEMORY=true)")
+        print("  MemorySearchPreviewTool SKIPPED (DISABLE_AGENT_MEMORY=true)")
     else:
         store_name = create_memory_store(project_client)
         if store_name:
-            memory_tool = MemorySearchTool(
+            memory_tool = MemorySearchPreviewTool(
                 memory_store_name=store_name,
                 scope="{{$userId}}",
                 update_delay=300,
             )
             tools.append(memory_tool)
-            print(f"  MemorySearchTool added (store={store_name}, scope=per-user)")
+            print(f"  MemorySearchPreviewTool added (store={store_name}, scope=per-user)")
 
     instructions = """\
 You are a Customer 360 assistant with access to Salesforce (CRM) and ServiceNow (ITSM) \

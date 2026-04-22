@@ -6,6 +6,12 @@
 
 **One sign-on. Seven tools. Your entire Salesforce org, with the user's own identity enforced end-to-end.**
 
+## Architecture
+
+<img src="docs/diagrams/azure-architecture.png" alt="Azure Architecture — Identity-Propagated MCP Meta-Tools">
+
+> [draw.io source](docs/diagrams/azure-architecture.drawio)
+
 ## The Problem
 
 ### 1. Full CRM Access Without Tool-Per-Object

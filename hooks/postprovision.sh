@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 set -uo pipefail
 
 echo "=== Post-provision hook ==="
@@ -15,4 +16,4 @@ pip install --quiet -r requirements.txt
 
 # Run the post-provision script (non-fatal — agent creation may need portal activation)
 echo "Running post-provision script..."
-python hooks/postprovision.py || echo "Post-provision script completed with warnings (see above)"
+python hooks/postprovision.py 

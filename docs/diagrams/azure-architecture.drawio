@@ -1,0 +1,460 @@
+<mxfile host="65bd71144e">
+    <diagram id="arch-1" name="Architecture">
+        <mxGraphModel dx="1531" dy="1033" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1300" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Identity-Propagated MCP Meta-Tools — Azure Architecture" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=22;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="300" y="10" width="650" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="subtitle" value="Salesforce CRM + ServiceNow ITSM · Per-user identity enforced end-to-end" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#999999;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="48" width="480" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="azureCloud" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=2;fillColor=#F0F5FF;strokeColor=#0078D4;strokeWidth=2;dashed=1;dashPattern=8 4;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="80" width="1100" height="1060" as="geometry"/>
+                </mxCell>
+                <mxCell id="azureCloudLabel" value="Microsoft Azure" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#0078D4;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="215" y="85" width="130" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="userZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFF8E1;strokeColor=#FFA000;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="20" y="120" width="150" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="userZoneLabel" value="Clients" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#E65100;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="125" width="55" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="browser" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/general/Browser.svg;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="160" width="55" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="browserLabel" value="Browser&#xa;MSAL.js SPA" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="217" width="75" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="teams" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/general/Module.svg;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="280" width="55" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="teamsLabel" value="Microsoft Teams&#xa;Bot Channel" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="38" y="337" width="100" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="frontendZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=#E8F5E9;strokeColor=#4CAF50;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="120" width="270" height="270" as="geometry"/>
+                </mxCell>
+                <mxCell id="frontendZoneLabel" value="Frontend &amp; Compute" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#1B5E20;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="235" y="125" width="145" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="chatApp" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/other/Worker_Container_App.svg;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="170" width="55" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="chatAppLabel" value="Chat App&#xa;Container App" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="228" y="227" width="80" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="containerEnv" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/other/Container_App_Environments.svg;" parent="1" vertex="1">
+                    <mxGeometry x="365" y="170" width="55" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="containerEnvLabel" value="Container Apps&#xa;Environment" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="348" y="227" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="botService" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/ai_machine_learning/Bot_Services.svg;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="290" width="55" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="botServiceLabel" value="Bot Service&#xa;Teams Channel" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="226" y="347" width="85" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="acr" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/containers/Container_Registries.svg;" parent="1" vertex="1">
+                    <mxGeometry x="365" y="290" width="55" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="acrLabel" value="Container&#xa;Registry (ACR)" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="348" y="347" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="aiZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=#EDE7F6;strokeColor=#7E57C2;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="510" y="120" width="340" height="270" as="geometry"/>
+                </mxCell>
+                <mxCell id="aiZoneLabel" value="AI Services" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#4A148C;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="525" y="125" width="85" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="aiFoundry" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/ai_machine_learning/Cognitive_Services.svg;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="170" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="aiFoundryLabel" value="AI Foundry&#xa;Project + Agent" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="526" y="232" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="gpt4o" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/ai_machine_learning/Azure_OpenAI.svg;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="170" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="gpt4oLabel" value="GPT-4o&#xa;Model Deployment" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="678" y="232" width="105" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfOboConn" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/networking/Connections.svg;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="295" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfOboConnLabel" value="SF OBO Conn" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="527" y="345" width="75" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="snOboConn" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/networking/Connections.svg;" parent="1" vertex="1">
+                    <mxGeometry x="625" y="295" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="snOboConnLabel" value="SN OBO Conn" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="609" y="345" width="80" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="aiGateway" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/networking/Connections.svg;" parent="1" vertex="1">
+                    <mxGeometry x="715" y="295" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="aiGatewayLabel" value="AI Gateway" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="707" y="345" width="65" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="monZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#E3F2FD;strokeColor=#1565C0;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="870" y="120" width="370" height="270" as="geometry"/>
+                </mxCell>
+                <mxCell id="monZoneLabel" value="Monitoring &amp; Ops" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#0D47A1;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="885" y="125" width="120" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="logAnalytics" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/management_governance/Log_Analytics_Workspaces.svg;" parent="1" vertex="1">
+                    <mxGeometry x="895" y="165" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="logAnalyticsLabel" value="Log Analytics" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="882" y="215" width="75" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="appInsights" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/devops/Application_Insights.svg;" parent="1" vertex="1">
+                    <mxGeometry x="985" y="165" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="appInsightsLabel" value="App Insights" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="974" y="215" width="70" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="storage" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/storage/Storage_Accounts.svg;" parent="1" vertex="1">
+                    <mxGeometry x="1075" y="165" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="storageLabel" value="Storage" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="1077" y="215" width="45" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="workbook" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/analytics/Azure_Workbooks.svg;" parent="1" vertex="1">
+                    <mxGeometry x="1165" y="165" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="workbookLabel" value="Workbook" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="1162" y="215" width="55" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="rg" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/general/Resource_Groups.svg;" parent="1" vertex="1">
+                    <mxGeometry x="940" y="265" width="48" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="rgLabel" value="Resource Group&#xa;rg-{envName}" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="922" y="315" width="85" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="identityZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=#FFF3E0;strokeColor=#FF9800;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="430" width="200" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="identityZoneLabel" value="Identity &amp; Access" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#E65100;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="235" y="435" width="120" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="entraId" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/identity/Azure_Active_Directory.svg;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="475" width="50" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="entraIdLabel" value="Entra ID&#xa;(Azure AD)" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="244" y="527" width="65" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="appReg" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/identity/App_Registrations.svg;" parent="1" vertex="1">
+                    <mxGeometry x="357" y="477" width="45" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="appRegLabel" value="App Reg&#xa;Chat + Bot" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="342" y="524" width="65" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="managedId" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/identity/Managed_Identities.svg;" parent="1" vertex="1">
+                    <mxGeometry x="286" y="572" width="40" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="managedIdLabel" value="Managed Identities" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="254" y="614" width="105" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="gatewayZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=4;fillColor=#FBE9E7;strokeColor=#E64A19;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="430" width="510" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="gatewayZoneLabel" value="API Gateway Layer (Shared APIM)" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#BF360C;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="455" y="435" width="240" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="apim" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/integration/API_Management_Services.svg;" parent="1" vertex="1">
+                    <mxGeometry x="470" y="490" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="apimLabel" value="API Management&#xa;APIM Gateway" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="450" y="552" width="100" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfOboPolicy" value="SF OBO Policy&#xa;3-Phase Exchange" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#E64A19;strokeWidth=1;fontSize=10;fontFamily=Helvetica;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="475" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="snOboPolicy" value="SN OBO Policy&#xa;JWT Bearer + Cache" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;strokeWidth=1;fontSize=10;fontFamily=Helvetica;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="540" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfPrmPolicy" value="SF PRM&#xa;RFC 9728" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#E64A19;strokeWidth=1;fontSize=9;fontFamily=Helvetica;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="745" y="475" width="80" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="snPrmPolicy" value="SN PRM&#xa;RFC 9728" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;strokeWidth=1;fontSize=9;fontFamily=Helvetica;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="745" y="540" width="80" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="secZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=#FCE4EC;strokeColor=#C2185B;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="970" y="430" width="310" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="secZoneLabel" value="Security &amp; Secrets" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#880E4F;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="985" y="435" width="130" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="keyvault" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/security/Key_Vaults.svg;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="490" width="55" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="keyvaultLabel" value="Key Vault" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="547" width="60" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfCert" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/app_services/App_Service_Certificates.svg;" parent="1" vertex="1">
+                    <mxGeometry x="1110" y="475" width="45" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfCertLabel" value="SF Cert&#xa;sf-jwt-bearer" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="1170" y="478" width="75" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="snCert" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/app_services/App_Service_Certificates.svg;" parent="1" vertex="1">
+                    <mxGeometry x="1110" y="555" width="45" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="snCertLabel" value="SN Cert&#xa;sn-jwt-bearer" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="1170" y="558" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfMcpZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=#E0F7FA;strokeColor=#00838F;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="670" width="420" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfMcpZoneLabel" value="Salesforce MCP Server" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#004D40;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="235" y="675" width="160" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfMcp" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/other/Worker_Container_App.svg;" parent="1" vertex="1">
+                    <mxGeometry x="245" y="715" width="50" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfMcpLabel" value="Salesforce MCP&#xa;Container App" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="228" y="767" width="85" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfToolsTitle" value="7 Meta-Tools (~1,300 tokens)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B2EBF2;strokeColor=#00838F;strokeWidth=1;fontStyle=1;fontSize=9;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="335" y="710" width="260" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="st1" value="whoami" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="335" y="737" width="60" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="st2" value="list_objects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="737" width="70" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="st3" value="describe_object" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="475" y="737" width="85" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="st4" value="soql_query" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="565" y="737" width="60" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="st5" value="search_records" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="335" y="762" width="82" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="st6" value="write_record" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="422" y="762" width="75" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="st7" value="process_approval" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#00838F;fontSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="502" y="762" width="95" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfClient" value="SF Client · Async REST + Auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B2EBF2;strokeColor=#00838F;strokeWidth=1;fontSize=9;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="233" y="800" width="140" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="snMcpZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=6;fillColor=#E8F5E9;strokeColor=#388E3C;strokeWidth=1;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="670" y="670" width="410" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="snMcpZoneLabel" value="ServiceNow MCP Server" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#1B5E20;fontSize=13;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="685" y="675" width="170" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="snMcp" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/other/Worker_Container_App.svg;" parent="1" vertex="1">
+                    <mxGeometry x="695" y="715" width="50" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="snMcpLabel" value="ServiceNow MCP&#xa;Container App" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="673" y="767" width="95" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="snToolsTitle" value="3 Meta-Tools (Generic)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;strokeWidth=1;fontStyle=1;fontSize=9;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="710" width="250" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="nt1" value="discover" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="740" width="80" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="nt2" value="query" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="870" y="740" width="75" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="nt3" value="write" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="955" y="740" width="75" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="snClient" value="SN Client · Async REST + Auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;strokeWidth=1;fontSize=9;fontFamily=Helvetica;" parent="1" vertex="1">
+                    <mxGeometry x="693" y="800" width="140" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=5;fillColor=#E0F7FA;strokeColor=#00838F;strokeWidth=2;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="910" width="430" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfZoneLabel" value="Salesforce Cloud (External)" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#004D40;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="215" y="915" width="185" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfOrg" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;image=data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20120%2080%22%3E%3Cpath%20d%3D%22M49.5%2012C42%2012%2035.5%2016.5%2032.5%2023%2029.5%2020%2025.5%2018%2021%2018%2012%2018%205%2025.5%205%2034.5S12%2051%2021%2051h72c10%200%2018-8%2018-18s-7-17.5-16-18.5C93.5%205%2085%20-1%2074%20-1c-6.5%200-12%202.5-15.5%206C55.5%202.5%2052.5%201%2049%201c-5.5%200-10%203.5-12%208.5z%22%20fill%3D%22%2300A1E0%22%20transform%3D%22translate(2%2C8)%22%2F%3E%3Ctext%20x%3D%2260%22%20y%3D%2248%22%20text-anchor%3D%22middle%22%20fill%3D%22white%22%20font-size%3D%2213%22%20font-weight%3D%22bold%22%20font-family%3D%22Arial%2Csans-serif%22%3Esalesforce%3C%2Ftext%3E%3C%2Fsvg%3E;" parent="1" vertex="1">
+                    <mxGeometry x="218" y="948" width="68" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfOrgLabel" value="Salesforce Org&#xa;REST API v60+" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="210" y="995" width="85" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfConnApp" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/security/Application_Security_Groups.svg;" parent="1" vertex="1">
+                    <mxGeometry x="355" y="950" width="45" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfConnAppLabel" value="Connected App&#xa;JWT Bearer" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="338" y="997" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfPerms" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/identity/Identity_Governance.svg;" parent="1" vertex="1">
+                    <mxGeometry x="475" y="950" width="45" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfPermsLabel" value="User Permissions&#xa;FLS / Sharing" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="453" y="997" width="90" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfFedId" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/identity/Azure_AD_B2C.svg;" parent="1" vertex="1">
+                    <mxGeometry x="575" y="952" width="40" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="sfFedIdLabel" value="Federation ID" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="558" y="994" width="75" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="snZone" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=5;fillColor=#E8F5E9;strokeColor=#388E3C;strokeWidth=2;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="910" width="420" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="snZoneLabel" value="ServiceNow Cloud (External)" style="text;html=1;align=left;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#1B5E20;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="665" y="915" width="190" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="snOrg" value="" style="shape=image;verticalLabelPosition=bottom;labelBackgroundColor=default;verticalAlign=top;aspect=fixed;imageAspect=0;image=data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20120%2080%22%3E%3Crect%20x%3D%225%22%20y%3D%2210%22%20width%3D%22110%22%20height%3D%2260%22%20rx%3D%2212%22%20fill%3D%22%23293E40%22%2F%3E%3Ctext%20x%3D%2260%22%20y%3D%2248%22%20text-anchor%3D%22middle%22%20fill%3D%22%2381B5A1%22%20font-size%3D%2216%22%20font-weight%3D%22bold%22%20font-family%3D%22Arial%2Csans-serif%22%3EServiceNow%3C%2Ftext%3E%3C%2Fsvg%3E;" parent="1" vertex="1">
+                    <mxGeometry x="678" y="950" width="60" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="snOrgLabel" value="ServiceNow&#xa;Table API" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="676" y="993" width="65" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="snOauth" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/security/Application_Security_Groups.svg;" parent="1" vertex="1">
+                    <mxGeometry x="810" y="950" width="45" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="snOauthLabel" value="OAuth JWT App&#xa;oauth_token.do" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="791" y="997" width="85" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="snPerms" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/identity/Identity_Governance.svg;" parent="1" vertex="1">
+                    <mxGeometry x="935" y="950" width="45" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="snPermsLabel" value="User Permissions&#xa;ACLs / Roles" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=9;" parent="1" vertex="1">
+                    <mxGeometry x="913" y="997" width="90" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="a1" value="Responses API" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#4CAF50;strokeWidth=2;fontFamily=Helvetica;fontSize=10;fontColor=#1B5E20;" parent="1" source="browser" target="chatApp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a1auth" value="Get JWT" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#FF9800;strokeWidth=1;dashed=1;fontFamily=Helvetica;fontSize=9;fontColor=#E65100;" parent="1" source="browser" target="entraId" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="330" y="188"/>
+                            <mxPoint x="330" y="500"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a2" value="Activity Protocol" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#4CAF50;strokeWidth=2;fontFamily=Helvetica;fontSize=10;fontColor=#1B5E20;" parent="1" source="teams" target="botService" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#FF9800;strokeWidth=1;dashed=1;" parent="1" source="entraId" target="appReg" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a5" value="Responses API" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#7E57C2;strokeWidth=2;fontFamily=Helvetica;fontSize=10;fontColor=#4A148C;" parent="1" source="chatApp" target="aiFoundry" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="267" y="160"/>
+                            <mxPoint x="500" y="160"/>
+                            <mxPoint x="500" y="200"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a5bot" value="Responses API" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#7E57C2;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#4A148C;" parent="1" source="botService" target="aiFoundry" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="267" y="280"/>
+                            <mxPoint x="500" y="280"/>
+                            <mxPoint x="500" y="200"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a6" value="Agent Loop" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#7E57C2;strokeWidth=2;fontFamily=Helvetica;fontSize=10;fontColor=#4A148C;" parent="1" source="aiFoundry" target="gpt4o" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#7E57C2;strokeWidth=1;dashed=1;" parent="1" source="aiFoundry" target="sfOboConn" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a19b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#7E57C2;strokeWidth=1;dashed=1;" parent="1" source="aiFoundry" target="snOboConn" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a8sf" value="Tool Call (SF)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;strokeColor=#E64A19;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#BF360C;" parent="1" source="sfOboConn" target="apim" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="564" y="410"/>
+                            <mxPoint x="500" y="410"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a8sn" value="Tool Call (SN)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;strokeColor=#388E3C;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#1B5E20;" parent="1" source="snOboConn" target="apim" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="649" y="420"/>
+                            <mxPoint x="500" y="420"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a9" value="SF OBO" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#E64A19;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#BF360C;" parent="1" source="apim" target="sfOboPolicy" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a9b" value="SN OBO" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#388E3C;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#1B5E20;" parent="1" source="apim" target="snOboPolicy" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a10" value="Cert Lookup" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#C2185B;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#880E4F;" parent="1" source="sfOboPolicy" target="keyvault" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a10b" value="Cert Lookup" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#C2185B;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#880E4F;" parent="1" source="snOboPolicy" target="keyvault" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#C2185B;strokeWidth=1;dashed=1;" parent="1" source="keyvault" target="sfCert" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a11b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#C2185B;strokeWidth=1;dashed=1;" parent="1" source="keyvault" target="snCert" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1090" y="518"/>
+                            <mxPoint x="1090" y="578"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a12" value="SSE/MCP + SF Token" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#00838F;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#004D40;" parent="1" source="apim" target="sfMcp" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="500" y="650"/>
+                            <mxPoint x="270" y="650"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a12b" value="SSE/MCP + SN Token" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#388E3C;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#1B5E20;" parent="1" source="apim" target="snMcp" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="500" y="655"/>
+                            <mxPoint x="720" y="655"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="a13" value="REST API (User Token)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#00838F;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#004D40;" parent="1" source="sfClient" target="sfOrg" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a13b" value="Table API (User Token)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;strokeColor=#388E3C;strokeWidth=2;fontFamily=Helvetica;fontSize=9;fontColor=#1B5E20;" parent="1" source="snClient" target="snOrg" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a16" value="authenticates" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#00838F;strokeWidth=1;fontFamily=Helvetica;fontSize=8;fontColor=#004D40;" parent="1" source="sfOrg" target="sfConnApp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a17" value="enforces" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#00838F;strokeWidth=1;fontFamily=Helvetica;fontSize=8;fontColor=#004D40;" parent="1" source="sfConnApp" target="sfPerms" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a16b" value="authenticates" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#388E3C;strokeWidth=1;fontFamily=Helvetica;fontSize=8;fontColor=#1B5E20;" parent="1" source="snOrg" target="snOauth" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a17b" value="enforces" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#388E3C;strokeWidth=1;fontFamily=Helvetica;fontSize=8;fontColor=#1B5E20;" parent="1" source="snOauth" target="snPerms" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#1565C0;strokeWidth=1;dashed=1;" parent="1" source="appInsights" target="logAnalytics" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a15" value="pull images" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#4CAF50;strokeWidth=1;dashed=1;fontFamily=Helvetica;fontSize=8;fontColor=#1B5E20;" parent="1" source="acr" target="containerEnv" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="flowBanner" value="Identity Flow:  Browser (MSAL)  →  Entra ID (JWT)  →  AI Foundry (Passthrough)  →  APIM (OBO Policy)  →  Key Vault (Cert)  →  SF/SN Token Exchange  →  User&#39;s Own Token" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F9A825;strokeWidth=2;fontSize=11;fontStyle=1;fontFamily=Helvetica;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="1060" width="880" height="35" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

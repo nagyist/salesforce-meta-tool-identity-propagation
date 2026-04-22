@@ -1,0 +1,2 @@
+[    3915ms] [WARNING] ComponentProfiler: Component-level profiling has not been enabled. @ https://b.static.lightning.force.com/can96.sfdc-58ktaz/aurafile/%7B%22mode%22%3A%22PROD%22%2C%22dfs%22%3A%22c%22%2C%22app%22%3A%22one%3Aone%22%2C%22ls%22%3A1%2C%22lrmc%22%3A%22551347034%22%2C%22ln%22%3A1%7D/L3tg6Du6T_lsgFY9BwLwGA/apppart1-4.js:2146
+[    4074ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://orgfarm-80dbe7b6e4-dev-ed.develop.lightning.force.com/one/one.app:0

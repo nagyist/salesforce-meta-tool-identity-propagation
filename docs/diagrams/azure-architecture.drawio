@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="arch-1" name="Architecture">
-        <mxGraphModel dx="1531" dy="1033" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1300" math="0" shadow="0">
+        <mxGraphModel dx="1267" dy="964" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1300" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -47,10 +47,10 @@
                     <mxGeometry x="228" y="227" width="80" height="35" as="geometry"/>
                 </mxCell>
                 <mxCell id="containerEnv" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/other/Container_App_Environments.svg;" parent="1" vertex="1">
-                    <mxGeometry x="365" y="170" width="55" height="55" as="geometry"/>
+                    <mxGeometry x="365" y="182" width="45" height="45" as="geometry"/>
                 </mxCell>
                 <mxCell id="containerEnvLabel" value="Container Apps&#xa;Environment" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
-                    <mxGeometry x="348" y="227" width="90" height="35" as="geometry"/>
+                    <mxGeometry x="348" y="229" width="90" height="35" as="geometry"/>
                 </mxCell>
                 <mxCell id="botService" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/ai_machine_learning/Bot_Services.svg;" parent="1" vertex="1">
                     <mxGeometry x="240" y="290" width="55" height="55" as="geometry"/>
@@ -59,7 +59,7 @@
                     <mxGeometry x="226" y="347" width="85" height="35" as="geometry"/>
                 </mxCell>
                 <mxCell id="acr" value="" style="image;aspect=fixed;html=1;points=[];align=center;image=img/lib/azure2/containers/Container_Registries.svg;" parent="1" vertex="1">
-                    <mxGeometry x="365" y="290" width="55" height="55" as="geometry"/>
+                    <mxGeometry x="365" y="300" width="45" height="45" as="geometry"/>
                 </mxCell>
                 <mxCell id="acrLabel" value="Container&#xa;Registry (ACR)" style="text;html=1;align=center;verticalAlign=top;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#333333;fontSize=10;" parent="1" vertex="1">
                     <mxGeometry x="348" y="347" width="90" height="35" as="geometry"/>

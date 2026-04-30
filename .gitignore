@@ -44,3 +44,11 @@ certs/
 
 # Local-only assets (videos, large media) — not committed
 .local/
+
+# LinkedIn article + video assets (kept locally, not committed)
+publish/
+video-animation.html
+video-script*.md
+video-storyboard.md
+.claude/docs/article-prep/
+

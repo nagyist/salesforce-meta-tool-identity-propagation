@@ -191,6 +191,10 @@ salesforce-meta-tool-identity-propagation/
 
 ---
 
+## Related Projects
+
+- **[snow-meta-tool](https://github.com/ozgurkarahan/snow-meta-tool)** — The ServiceNow counterpart: same meta-tool pattern and OBO identity propagation, applied to ServiceNow ITSM. Deploy both side-by-side to power a **Customer 360** AI Foundry agent that correlates Salesforce CRM data with ServiceNow incidents, changes, and requests under the user's own identity in each system.
+
 ## Contributing
 
 Contributions are welcome. Please open an [issue](https://github.com/ozgurkarahan/salesforce-meta-tool-identity-propagation/issues) or submit a pull request.

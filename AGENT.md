@@ -282,7 +282,7 @@ Read `~/projects/memory/agent-config/workflow.md` for the full set of global wor
 
 1. **Plan Before Coding** — For any task with 3+ steps, outline the approach first. Get approval before implementing.
 2. **Verify Before Done** — Never mark a task complete without proving it works.
-3. **Learn From Mistakes** — After any correction, record the lesson in the project wiki page `~/projects/memory/wiki/projects/salesforce-meta-tool-id-prop.md` (and append `~/projects/memory/log.md`). Review the wiki at session start. The legacy `.ai/lessons-learned.md` was REMOVED — lessons live only in the wiki project page `~/projects/memory/wiki/projects/salesforce-meta-tool-id-prop.md`.
+3. **Learn From Mistakes** — After any correction, record the lesson in the project wiki page `wiki:projects/salesforce-meta-tool-id-prop` (resolve through Memory's `scripts/wiki_paths.py`) (and append `~/projects/memory/log.md`). Review the wiki at session start. The legacy `.ai/lessons-learned.md` was REMOVED — lessons live only in the wiki project page `wiki:projects/salesforce-meta-tool-id-prop` (resolve through Memory's `scripts/wiki_paths.py`).
 4. **No Blind Retries** — Diagnose root cause on failure. Don't retry non-transient errors.
 5. **Keep It Simple** — Don't add features, refactor code, or make improvements beyond what was asked.
 
@@ -299,7 +299,7 @@ Read `~/projects/memory/agent-config/platform.md` for full platform preferences 
 | Document | Contents |
 |----------|----------|
 | `CHANGELOG.md` | Release notes — v2 OAuth2 migration rationale, MS Learn citation, known platform issues |
-| `~/projects/memory/wiki/projects/salesforce-meta-tool-id-prop.md` | Project-specific lessons & debugging history (single source of truth; `.ai/lessons-learned.md` was REMOVED) |
+| `wiki:projects/salesforce-meta-tool-id-prop` (resolve through Memory's `scripts/wiki_paths.py`) | Project-specific lessons & debugging history (single source of truth; `.ai/lessons-learned.md` was REMOVED) |
 | `.ai/project-reference.md` | Technical details, implementation caveats |
 | `~/projects/memory/agent-config/knowledge/*.md` | Cross-project domain knowledge |
 
